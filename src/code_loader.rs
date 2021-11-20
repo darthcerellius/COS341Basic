@@ -251,7 +251,44 @@ mod test {
 
         let error_string = "notfound.txt: No such file or directory (os error 2)";
 
-
         assert_eq!(result.err().unwrap(), error_string)
+    }
+
+    #[test]
+    fn load_small_test_file() {
+        let test_dir = std::env::current_dir().unwrap().file_name().unwrap().to_str().unwrap().to_string();
+
+        let result = load_code_from_file("testfiles/test1.txt".to_string());
+
+        assert_eq!(result.as_ref().ok().unwrap().0, vec!["5"]);
+        assert_eq!(result.as_ref().ok().unwrap().1, vec!["quit"]);
+    }
+
+    #[test]
+    fn load_large_test_file() {
+        let reg_vec = vec![
+            String::from("0"),
+            String::from("5"),
+            String::from("10"),
+            String::from("hello"),
+            String::from("world"),
+            String::from("66"),
+        ];
+        let code_vec = vec![
+            String::from("let M0 = 5"),
+            String::from("if M0 < M1 goto C3"),
+            String::from("goto C6"),
+            String::from("output M3"),
+            String::from("output M4"),
+            String::from("quit"),
+            String::from("let M5 = M5 + M0"),
+            String::from("output M5"),
+            String::from("quit"),
+        ];
+
+        let result = load_code_from_file("testfiles/test2.txt".to_string());
+
+        assert_eq!(result.as_ref().ok().unwrap().0, reg_vec);
+        assert_eq!(result.as_ref().ok().unwrap().1, code_vec);
     }
 }
