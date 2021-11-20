@@ -21,7 +21,7 @@ pub mod segment_errors {
         pub(crate) error: ErrorTypes
     }
     pub struct CodeErrorCode{
-        error: ErrorTypes
+        pub(crate) error: ErrorTypes
     }
 
     impl ErrorCodes for VariableErrorCodes {
