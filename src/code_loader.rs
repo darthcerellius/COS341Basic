@@ -1,9 +1,60 @@
+use std::fs;
 use regex::Regex;
 use crate::errors::segment_errors::{error, VariableErrorCodes, CodeErrorCode, ErrorTypes, ErrorCodes, SegmentErrorTypes};
 
-// fn load_code_from_file(file_name: String) -> Result<(Vec<String>, Vec<String>), Box<dyn ErrorCodes>>{
-//     Err(Err)
-// }
+pub fn load_code_from_file(file_name: String) -> Result<(Vec<String>, Vec<String>), String>{
+    let file_data = fs::read_to_string(file_name.clone());
+    match file_data {
+        Ok(file_string) => {
+            const BEGIN_REGISTER_SEGMENT: &str = "BEGIN_REGISTER_SEGMENT\n";
+            const END_REGISTER_SEGMENT: &str = "\nEND_REGISTER_SEGMENT";
+            const BEGIN_CODE_SEGMENT: &str = "BEGIN_CODE_SEGMENT\n";
+            const END_CODE_SEGMENT: &str = "\nEND_CODE_SEGMENT";
+
+            let reg_start_pos = file_string.find(BEGIN_REGISTER_SEGMENT);
+            let reg_end_pos = file_string.find(END_REGISTER_SEGMENT);
+            let code_start_pos = file_string.find(BEGIN_CODE_SEGMENT);
+            let code_end_pos = file_string.find(END_CODE_SEGMENT);
+
+            //Ensure that the code and register segments are present
+            if reg_start_pos.is_none() {
+                return Err("No register segment found! Aborting...".to_string());
+            }
+            if reg_end_pos.is_none() {
+                return Err("Register segment not fully defined! Aborting...".to_string());
+            }
+            if code_start_pos.is_none() {
+                return Err("No code segment found! Aborting...".to_string());
+            }
+            if code_end_pos.is_none() {
+                return Err("Code segment not fully defined! Aborting...".to_string());
+            }
+
+            let mut s_pos = reg_start_pos.unwrap() + BEGIN_REGISTER_SEGMENT.len();
+            let mut e_pos = reg_end_pos.unwrap();
+
+            let register_segment = load_variable_segment(file_string[s_pos..e_pos].as_ref());
+
+            if register_segment.is_err() {
+                return Err(register_segment.err().unwrap().to_string());
+            }
+
+            s_pos = code_start_pos.unwrap() + BEGIN_CODE_SEGMENT.len();
+            e_pos = code_end_pos.unwrap();
+
+            let code_segment = load_code_segment(file_string[s_pos..e_pos].as_ref());
+
+            if code_segment.is_err() {
+                return Err(code_segment.err().unwrap().to_string());
+            }
+
+            Ok((register_segment.unwrap(), code_segment.unwrap()))
+        },
+        Err(msg) => {
+            Err(format!("{}: {}", file_name, msg).to_string())
+        }
+    }
+}
 
 /// Parses a variable string using a provided Regex, extracts the data from the string and returns a Vec
 /// containing the data in a 1:1 mapping according to the index of the data in the string
@@ -23,7 +74,7 @@ use crate::errors::segment_errors::{error, VariableErrorCodes, CodeErrorCode, Er
 /// let expected_result = VariableErrorCodes{
 ///             error: ErrorTypes::MalformedAssignment
 /// };
-/// let result = load_segment(SegmentErrorTypes::Variable, segment, split_regex)
+/// let result = load_segment(SegmentErrorTypes::Variable, segment, split_regex);
 /// assert_eq!(result.err().unwrap(), expected_result.value())
 /// ```
 fn load_segment(segment_error_type: SegmentErrorTypes, variable_string: &str, split_regex: Regex) -> Result<Vec<String>, u32> {
@@ -94,6 +145,7 @@ fn load_code_segment(segment: &str) -> Result<Vec<String>, u32> {
 mod test {
     use crate::code_loader::{load_code_segment, load_variable_segment};
     use crate::errors::segment_errors::{CodeErrorCode, ErrorCodes, ErrorTypes, VariableErrorCodes};
+    use super::*;
 
     #[test]
     fn test_malformed_variable_segment() {
@@ -191,5 +243,15 @@ mod test {
             error: ErrorTypes::MalformedSegment
         };
         assert_eq!(result.err().unwrap(), expected_result.value())
+    }
+
+    #[test]
+    fn get_error_from_file_not_found() {
+        let result = load_code_from_file("notfound.txt".to_string());
+
+        let error_string = "notfound.txt: No such file or directory (os error 2)";
+
+
+        assert_eq!(result.err().unwrap(), error_string)
     }
 }
