@@ -2,8 +2,18 @@ use std::fs;
 use regex::Regex;
 use crate::errors::segment_errors::{error, ErrorTypes, SegmentErrorTypes};
 
-pub fn load_code_from_file(file_name: String) -> Result<(Vec<String>, Vec<String>), String>{
-    let file_data = fs::read_to_string(file_name.clone());
+/// Loads COS341Basic data from a file and creates two vectors, one for the register data and
+/// the other for the code data. If an error is encountered while loading program data, a
+/// message detailing the error is returned.
+///
+/// # Arguments
+/// * `file_path` - Path of the file to load
+///
+/// # Returns
+/// * `Ok((Vec<String>, Vec<String>))` - a tuple containing the register and code vectors
+/// * `Err(String)` - a message detailing any error that occurred while loading the program
+pub fn load_code_from_file(file_path: String) -> Result<(Vec<String>, Vec<String>), String>{
+    let file_data = fs::read_to_string(file_path.clone());
     match file_data {
         Ok(file_string) => {
             const BEGIN_REGISTER_SEGMENT: &str = "BEGIN_REGISTER_SEGMENT\n";
@@ -33,25 +43,35 @@ pub fn load_code_from_file(file_name: String) -> Result<(Vec<String>, Vec<String
             let mut s_pos = reg_start_pos.unwrap() + BEGIN_REGISTER_SEGMENT.len();
             let mut e_pos = reg_end_pos.unwrap();
 
-            let register_segment = load_variable_segment(file_string[s_pos..e_pos].as_ref());
+            let reg_vec = if s_pos < e_pos {
+                let register_segment = load_variable_segment(file_string[s_pos..e_pos].as_ref());
 
-            if register_segment.is_err() {
-                return Err(register_segment.err().unwrap().to_string());
-            }
+                if register_segment.is_err() {
+                    return Err(register_segment.err().unwrap().to_string());
+                }
+                register_segment.unwrap()
+            } else {
+                Vec::new()
+            };
 
             s_pos = code_start_pos.unwrap() + BEGIN_CODE_SEGMENT.len();
             e_pos = code_end_pos.unwrap();
 
-            let code_segment = load_code_segment(file_string[s_pos..e_pos].as_ref());
+            let code_vec = if s_pos < e_pos {
+                let code_segment = load_code_segment(file_string[s_pos..e_pos].as_ref());
 
-            if code_segment.is_err() {
-                return Err(code_segment.err().unwrap().to_string());
-            }
+                if code_segment.is_err() {
+                    return Err(code_segment.err().unwrap().to_string());
+                }
+                code_segment.unwrap()
+            } else {
+                Vec::new()
+            };
 
-            Ok((register_segment.unwrap(), code_segment.unwrap()))
+            Ok((reg_vec, code_vec))
         },
         Err(msg) => {
-            Err(format!("{}: {}", file_name, msg).to_string())
+            Err(format!("{}: {}", file_path, msg).to_string())
         }
     }
 }
@@ -324,5 +344,15 @@ mod test {
         let result = load_code_from_file("testfiles/test7.txt".to_string());
 
         assert_eq!(result.as_ref().err().unwrap(), "8");
+    }
+
+    #[test]
+    fn load_file_with_empty_segments(){
+        let result = load_code_from_file("testfiles/test8.txt".to_string());
+
+        let empty_vec : Vec<String> = Vec::new();
+
+        assert_eq!(result.as_ref().ok().unwrap().0, empty_vec.clone());
+        assert_eq!(result.as_ref().ok().unwrap().1, empty_vec);
     }
 }
