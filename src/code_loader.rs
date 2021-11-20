@@ -20,9 +20,11 @@ use crate::errors::segment_errors::{error, VariableErrorCodes, CodeErrorCode, Er
 /// # Examples
 ///
 /// ```
-/// let var_array = load_variable_segment("0 1\n1 2")
-/// let expected_array = vec![String::from("1"), String::from("2")];
-/// assert_eq!(var_array.ok().unwrap(), expected_array);
+/// let expected_result = VariableErrorCodes{
+///             error: ErrorTypes::MalformedAssignment
+/// };
+/// let result = load_segment(SegmentErrorTypes::Variable, segment, split_regex)
+/// assert_eq!(result.err().unwrap(), expected_result.value())
 /// ```
 fn load_segment(segment_error_type: SegmentErrorTypes, variable_string: &str, split_regex: Regex) -> Result<Vec<String>, u32> {
 
@@ -34,7 +36,7 @@ fn load_segment(segment_error_type: SegmentErrorTypes, variable_string: &str, sp
         return Ok(memory_vec)
     }
 
-    if !split_regex.is_match(variable_string) {
+    if !split_regex.is_match(variable_string.trim()) {
         return Err(error(&segment_error_type, ErrorTypes::MalformedSegment).value());
     }
 
@@ -79,14 +81,19 @@ fn load_segment(segment_error_type: SegmentErrorTypes, variable_string: &str, sp
 }
 
 fn load_variable_segment(segment: &str) -> Result<Vec<String>, u32> {
-    let var_regex = Regex::new(r#"(\d+) (\w+)"#).unwrap();
+    let var_regex = Regex::new(r#"^(\d+) (\w+)"#).unwrap();
     load_segment(SegmentErrorTypes::Variable, segment, var_regex)
+}
+
+fn load_code_segment(segment: &str) -> Result<Vec<String>, u32> {
+    let var_regex = Regex::new(r#"^(\d+) (.+)"#).unwrap();
+    load_segment(SegmentErrorTypes::Code, segment, var_regex)
 }
 
 #[cfg(test)]
 mod test {
-    use crate::code_loader::load_variable_segment;
-    use crate::errors::segment_errors::{ErrorCodes, ErrorTypes, VariableErrorCodes};
+    use crate::code_loader::{load_code_segment, load_variable_segment};
+    use crate::errors::segment_errors::{CodeErrorCode, ErrorCodes, ErrorTypes, VariableErrorCodes};
 
     #[test]
     fn test_malformed_variable_segment() {
@@ -163,5 +170,26 @@ mod test {
         let result = load_variable_segment("");
         let expected_vector:Vec<String> = Vec::new();
         assert_eq!(result.ok().unwrap(), expected_vector)
+    }
+
+    #[test]
+    fn test_with_multiple_newlines() {
+        let result = load_variable_segment("\n\r\n\n0 5\n\n\n1 2");
+        assert_eq!(result.ok().unwrap(), vec![String::from("5"), String::from("2")])
+    }
+
+    #[test]
+    fn test_loading_code() {
+        let result = load_code_segment("0 let M0 = 3");
+        assert_eq!(result.ok().unwrap(), vec![String::from("let M0 = 3")])
+    }
+
+    #[test]
+    fn test_missing_space_between_index_and_code() {
+        let result = load_code_segment("0let M0 = 3");
+        let expected_result = CodeErrorCode{
+            error: ErrorTypes::MalformedSegment
+        };
+        assert_eq!(result.err().unwrap(), expected_result.value())
     }
 }
