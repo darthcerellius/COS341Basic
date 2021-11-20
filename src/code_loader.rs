@@ -1,6 +1,6 @@
 use std::fs;
 use regex::Regex;
-use crate::errors::segment_errors::{error, VariableErrorCodes, CodeErrorCode, ErrorTypes, ErrorCodes, SegmentErrorTypes};
+use crate::errors::segment_errors::{error, ErrorTypes, SegmentErrorTypes};
 
 pub fn load_code_from_file(file_name: String) -> Result<(Vec<String>, Vec<String>), String>{
     let file_data = fs::read_to_string(file_name.clone());
@@ -256,7 +256,6 @@ mod test {
 
     #[test]
     fn load_small_test_file() {
-        let test_dir = std::env::current_dir().unwrap().file_name().unwrap().to_str().unwrap().to_string();
 
         let result = load_code_from_file("testfiles/test1.txt".to_string());
 
@@ -290,5 +289,40 @@ mod test {
 
         assert_eq!(result.as_ref().ok().unwrap().0, reg_vec);
         assert_eq!(result.as_ref().ok().unwrap().1, code_vec);
+    }
+
+    #[test]
+    fn load_code_with_missing_segments() {
+        let mut result = load_code_from_file("testfiles/test3.txt".to_string());
+
+        assert_eq!(result.as_ref().err().unwrap(), "No register segment found! Aborting...");
+
+        result = load_code_from_file("testfiles/test4.txt".to_string());
+
+        assert_eq!(result.as_ref().err().unwrap(), "No code segment found! Aborting...");
+    }
+
+    #[test]
+    fn load_code_with_swapped_segment() {
+
+        let result = load_code_from_file("testfiles/test5.txt".to_string());
+
+        assert_eq!(result.as_ref().ok().unwrap().0, vec!["5"]);
+        assert_eq!(result.as_ref().ok().unwrap().1, vec!["quit"]);
+    }
+
+    #[test]
+    fn load_code_with_register_error() {
+
+        let result = load_code_from_file("testfiles/test6.txt".to_string());
+
+        assert_eq!(result.as_ref().err().unwrap(), "5");
+    }
+
+    #[test]
+    fn load_code_with_code_error() {
+        let result = load_code_from_file("testfiles/test7.txt".to_string());
+
+        assert_eq!(result.as_ref().err().unwrap(), "8");
     }
 }
