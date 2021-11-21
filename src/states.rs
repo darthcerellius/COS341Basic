@@ -1,10 +1,11 @@
+use lazy_static::lazy_static;
 use regex::Regex;
-use crate::states::States::ExecuteState;
 
 pub trait StateMachine {
     fn execute(&self, variable_list : &mut Vec<String>, code_list : &Vec<String> , state: usize) -> (usize, Option<Box<dyn StateMachine>>);
 }
 
+#[derive(Copy, Clone)]
 pub enum States {
     AssignState,
     ExecuteState,
@@ -21,14 +22,15 @@ struct IfState{}
 struct GotoState{}
 struct OutputState{}
 
-// regular expressions to determine which state to go to
-const STATES_VEC: Vec<(Regex, States)> = vec![
-    (Regex::new(r"let").unwrap(), States::AssignState),
-    (Regex::new(r"goto").unwrap(), States::GotoState),
-    (Regex::new("if").unwrap(), States::IfState),
-    (Regex::new("quit").unwrap(), States::QuitState),
-    (Regex::new("output").unwrap(), States::OutputState)
-];
+lazy_static! {
+    static ref STATES: [(Regex, States); 5] = [
+        (Regex::new(r"let").unwrap(), States::AssignState),
+        (Regex::new(r"goto").unwrap(), States::GotoState),
+        (Regex::new("if").unwrap(), States::IfState),
+        (Regex::new("quit").unwrap(), States::QuitState),
+        (Regex::new("output").unwrap(), States::OutputState)
+    ];
+}
 
 /// Returns the desired state based on the provided state type
 /// # Arguments
@@ -57,7 +59,7 @@ impl StateMachine for ExecuteState {
         let code = &code_list.get(state);
         match code {
             Some(value) => {
-                for new_state in STATES_VEC {
+                for new_state in STATES.iter() {
                     if new_state.0.is_match(value){
                         return (state, Some(get_state(new_state.1)))
                     }
@@ -70,6 +72,24 @@ impl StateMachine for ExecuteState {
 }
 
 impl StateMachine for EndState {
+    fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> (usize, Option<Box<dyn StateMachine>>) {
+        (0, None)
+    }
+}
+
+impl StateMachine for GotoState {
+    fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> (usize, Option<Box<dyn StateMachine>>) {
+        (0, None)
+    }
+}
+
+impl StateMachine for IfState {
+    fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> (usize, Option<Box<dyn StateMachine>>) {
+        (0, None)
+    }
+}
+
+impl StateMachine for OutputState {
     fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> (usize, Option<Box<dyn StateMachine>>) {
         (0, None)
     }
@@ -126,8 +146,7 @@ impl StateMachine for AssignState {
 
 #[cfg(test)]
 mod test {
-    use crate::ExecuteState;
-    use super::{AssignState, StateMachine};
+    use super::{AssignState, StateMachine, ExecuteState};
 
     #[test]
     fn check_that_start_returns_0() {
