@@ -83,11 +83,12 @@ impl StateMachine for AssignState {
 
 #[cfg(test)]
 mod test {
-    use super::{AssignState, StartState, StateMachine};
+    use crate::ExecuteState;
+    use super::{AssignState, StateMachine};
 
     #[test]
     fn check_that_start_returns_0() {
-        let state = StartState{}.execute(&mut vec![], &vec![], 0);
+        let state = ExecuteState{}.execute(&mut vec![], &vec![], 0);
         assert_eq!(0, state.0)
     }
 
