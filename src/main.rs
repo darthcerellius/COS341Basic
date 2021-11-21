@@ -3,7 +3,7 @@ mod errors;
 mod states;
 
 use std::process::exit;
-use crate::states::{ExecuteState, StateMachine};
+use crate::states::{States, get_state};
 
 fn main() {
     let program_file = std::env::args().nth(1);
@@ -12,7 +12,7 @@ fn main() {
             let program = code_loader::load_code_from_file(data);
             match program {
                 Ok((mut reg_data, code_data)) => {
-                    let mut state = ExecuteState{}.execute(&mut reg_data, &code_data, 0);
+                    let mut state = get_state(States::ExecuteState).execute(&mut reg_data, &code_data, 0);
                     loop {
                         let state_function = state.1;
                         match state_function {
@@ -20,7 +20,6 @@ fn main() {
                             None => exit(0)
                         }
                     }
-
                 },
                 Err(error_msg) => {
                     eprintln!("{}", error_msg);

@@ -1,25 +1,68 @@
 use regex::Regex;
+use crate::states::States::ExecuteState;
 
 pub trait StateMachine {
     fn execute(&self, variable_list : &mut Vec<String>, code_list : &Vec<String> , state: usize) -> (usize, Option<Box<dyn StateMachine>>);
 }
 
+pub enum States {
+    AssignState,
+    ExecuteState,
+    GotoState,
+    IfState,
+    QuitState,
+    OutputState
+}
+
 struct EndState {}
 struct AssignState {}
-pub struct ExecuteState {}
+struct ExecuteState {}
+struct IfState{}
+struct GotoState{}
+struct OutputState{}
+
+// regular expressions to determine which state to go to
+const STATES_VEC: Vec<(Regex, States)> = vec![
+    (Regex::new(r"let").unwrap(), States::AssignState),
+    (Regex::new(r"goto").unwrap(), States::GotoState),
+    (Regex::new("if").unwrap(), States::IfState),
+    (Regex::new("quit").unwrap(), States::QuitState),
+    (Regex::new("output").unwrap(), States::OutputState)
+];
+
+/// Returns the desired state based on the provided state type
+/// # Arguments
+/// * state_type - Determine the type of state to return
+/// # Returns
+/// Box<dyn StateMachine> - A state that implements the 'StateMachine' trait.
+///
+/// # Examples
+/// ```
+/// let state = get_state(States::EndState);
+/// state.execute(vec![], vec![], 0);
+/// ```
+pub fn get_state(state_type: States) -> Box<dyn StateMachine> {
+    match state_type {
+        States::AssignState => Box::new(AssignState{}),
+        States::GotoState => Box::new(GotoState{}),
+        States::IfState => Box::new(IfState{}),
+        States::QuitState => Box::new(EndState{}),
+        States::OutputState => Box::new(OutputState{}),
+        States::ExecuteState => Box::new(ExecuteState{}),
+    }
+}
 
 impl StateMachine for ExecuteState {
     fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> (usize, Option<Box<dyn StateMachine>>) {
         let code = &code_list.get(state);
         match code {
             Some(value) => {
-                let assign_statement = Regex::new(r"let").unwrap();
-                let goto_statement = Regex::new(r"goto").unwrap();
-                if assign_statement.is_match(value) {
-                    (state, Some(Box::new(AssignState{})))
-                } else {
-                    (state, Some(Box::new(EndState{})))
+                for new_state in STATES_VEC {
+                    if new_state.0.is_match(value){
+                        return (state, Some(get_state(new_state.1)))
+                    }
                 }
+                return(state, None)
             },
             None => (state, None)
         }

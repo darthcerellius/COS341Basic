@@ -80,13 +80,13 @@ pub fn load_code_from_file(file_path: String) -> Result<(Vec<String>, Vec<String
 /// containing the data in a 1:1 mapping according to the index of the data in the string
 ///
 /// # Arguments
-/// * `segment_error_type` - Tells the function which segment type error codes the function returns should
+/// * segment_error_type - Tells the function which segment type error codes the function returns should
 ///                          the parser encounter any error.
-/// * `variable_string` - A string that holds variable data in the format 'index value'. Each variable
+/// * variable_string - A string that holds variable data in the format 'index value'. Each variable
 ///                       in this string is separated by '\n' or '\r\n'.
 /// # Returns
-/// * `Ok(Vec<String>)` - An array holding the declared values.
-/// * `Err(u32)` - An error code. This happens when there was an error parsing the variable string.
+/// * Ok(Vec<String>) - An array holding the declared values.
+/// * Err(u32) - An error code. This happens when there was an error parsing the variable string.
 ///
 /// # Examples
 ///
