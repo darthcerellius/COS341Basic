@@ -2,7 +2,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 pub trait StateMachine {
-    fn execute(&self, variable_list : &mut Vec<String>, code_list : &Vec<String> , state: usize) -> (usize, Option<Box<dyn StateMachine>>);
+    fn execute(&self, variable_list : &mut Vec<String>, code_list : &Vec<String> , state: usize) -> Result<(usize, Box<dyn StateMachine>),String>;
 }
 
 #[derive(Copy, Clone)]
@@ -55,48 +55,49 @@ pub fn get_state(state_type: States) -> Box<dyn StateMachine> {
 }
 
 impl StateMachine for ExecuteState {
-    fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> (usize, Option<Box<dyn StateMachine>>) {
+    fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
         let code = &code_list.get(state);
         match code {
             Some(value) => {
                 for new_state in TRANSITION_FUNCTIONS.iter() {
                     if new_state.0.is_match(value){
-                        return (state, Some(get_state(new_state.1)))
+                        return Ok((state, get_state(new_state.1)));
                     }
                 }
-                return(state, None)
+                return Err(format!("Unknown instruction: {}\nAborting...", value));
             },
-            None => (state, None)
+            // If we have no code to run, go straight to the exit state
+            None => Ok((state, get_state(States::QuitState)))
         }
     }
 }
 
 impl StateMachine for EndState {
-    fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> (usize, Option<Box<dyn StateMachine>>) {
-        (0, None)
+    fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
+        Ok((state, get_state(States::QuitState)))
     }
 }
 
 impl StateMachine for GotoState {
-    fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> (usize, Option<Box<dyn StateMachine>>) {
-        (0, None)
+    fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
+        Ok((state, get_state(States::QuitState)))
     }
 }
 
 impl StateMachine for IfState {
-    fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> (usize, Option<Box<dyn StateMachine>>) {
-        (0, None)
+    fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
+        Ok((state, get_state(States::QuitState)))
     }
 }
 
 impl StateMachine for OutputState {
-    fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> (usize, Option<Box<dyn StateMachine>>) {
-        (0, None)
+    fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
+        Ok((state, get_state(States::QuitState)))
     }
 }
 
 impl StateMachine for AssignState {
-    fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> (usize, Option<Box<dyn StateMachine>>) {
+    fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
         let code = &code_list.get(state); // get the line of code
 
         //ensure that we actually have a line of code to work with
@@ -118,9 +119,9 @@ impl StateMachine for AssignState {
                     // and move back to the execute state.
                     if variable_list.len() > *memory_pos {
                         variable_list[*memory_pos] = (&assign_tokens[2]).parse::<String>().unwrap().replace("\"", "");
-                        (state + 1, Some(Box::new(ExecuteState {})))
+                        Ok((state + 1, get_state(States::ExecuteState)))
                     } else {
-                        (state, None) // Tell the interpreter to exit
+                        Err(format!("Accessing register that is not allocated: {}\nAborting", *memory_pos))
                     }
 
                     // Check if assigning from memory
@@ -128,30 +129,48 @@ impl StateMachine for AssignState {
                     let assign_tokens = assign_from_memory.captures(value).unwrap();
                     let lhs_pos = &assign_tokens[1].parse::<usize>().unwrap(); // get the memory address for LHS
                     let rhs_pos = &assign_tokens[2].parse::<usize>().unwrap(); // get the memory address for RHS
-                    if variable_list.len() > *lhs_pos && variable_list.len() > *rhs_pos {
-                        variable_list[*lhs_pos] = (variable_list[*rhs_pos]).parse().unwrap();
-                        (state + 1, Some(Box::new(ExecuteState {})))
-                    } else {
-                        (state, None) // Tell the interpreter to exit
+
+                    if variable_list.len() < *lhs_pos {
+                        return Err(format!("Accessing register that is not allocated: {}\nAborting", *lhs_pos));
                     }
+
+                    if variable_list.len() < *rhs_pos {
+                        return Err(format!("Accessing register that is not allocated: {}\nAborting", *rhs_pos));
+                    }
+
+                    variable_list[*lhs_pos] = (variable_list[*rhs_pos]).parse().unwrap();
+                    Ok((state + 1, get_state(States::ExecuteState)))
+
                     // No valid assign statement
                 } else {
-                    (state, None) // Tell the interpreter to exit
+                    Err(format!("Invalid assign instruction: {}\nAborting...", value))
                 }
             },
-            None => (state, None) // Tell the interpreter to exit
+            // If we have no code to run, go straight to the exit state
+            None => Ok((state, get_state(States::QuitState)))
         }
     }
 }
 
 #[cfg(test)]
 mod test {
+    use crate::{get_state, States};
     use super::{AssignState, StateMachine, ExecuteState};
 
     #[test]
     fn check_that_start_returns_0() {
-        let state = ExecuteState{}.execute(&mut vec![], &vec![], 0);
-        assert_eq!(0, state.0)
+        let state = get_state(States::ExecuteState).execute(&mut vec![], &vec![], 0);
+        assert_eq!(0, state.ok().unwrap().0)
+    }
+
+    #[test]
+    fn execute_state_calls_assign_state() {
+        let state = get_state(States::ExecuteState);
+        let mut register_vec = vec![String::from("0")];
+        let code_vec = vec![String::from("let M0 = 5")];
+        let result = state.execute(&mut register_vec, &code_vec, 0);
+        result.as_ref().ok().unwrap().1.execute(&mut register_vec, &code_vec, result.as_ref().ok().unwrap().0);
+        assert_eq!(register_vec, vec![String::from("5")])
     }
 
     #[test]

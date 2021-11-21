@@ -17,11 +17,13 @@ fn main() {
                 Ok((mut reg_data, code_data)) => {
                     let mut state = get_state(States::ExecuteState).execute(&mut reg_data, &code_data, 0);
                     loop {
-                        let state_function = state.1;
-                        match state_function {
-                            Some(ref new_state) => state = new_state.execute(&mut reg_data, &code_data, state.0),
-                            None => exit(0)
+                        if state.as_ref().is_err() {
+                            eprintln!("{}", state.err().unwrap());
+                            exit(-1);
                         }
+                        let state_function = &state.as_ref().ok().unwrap().1;
+                        let new_state = state.as_ref().ok().unwrap().0;
+                        state_function.execute(&mut reg_data, &code_data, new_state);
                     }
                 },
                 Err(error_msg) => {
