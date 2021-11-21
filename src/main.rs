@@ -23,7 +23,7 @@ fn main() {
                         }
                         let state_function = &state.as_ref().ok().unwrap().1;
                         let new_state = state.as_ref().ok().unwrap().0;
-                        state_function.execute(&mut reg_data, &code_data, new_state);
+                        state = state_function.execute(&mut reg_data, &code_data, new_state);
                     }
                 },
                 Err(error_msg) => {

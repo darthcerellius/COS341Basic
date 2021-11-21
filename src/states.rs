@@ -1,5 +1,45 @@
+use std::io;
+use std::process::exit;
 use lazy_static::lazy_static;
 use regex::Regex;
+
+#[cfg(test)]
+static mut IO_BUFFER: String = String::new();
+
+#[cfg(test)]
+fn get_input() -> String {
+    let mut ret_str = String::new();
+    unsafe {
+        ret_str = IO_BUFFER.clone();
+    }
+    ret_str
+}
+
+#[cfg(not(test))]
+fn get_input() -> String {
+    let mut input = String::new();
+    let input_result = io::stdin().read_line(&mut input);
+    match input_result {
+        Ok(_) => {},
+        Err(_) => {
+            eprintln!("Error reading input!\nAborting...");
+            exit(-1);
+        }
+    }
+    input
+}
+
+#[cfg(test)]
+fn write_output(out_string: String) {
+    unsafe {
+        IO_BUFFER = out_string;
+    }
+}
+
+#[cfg(not(test))]
+fn write_output(out_string: String) {
+    println!("{}", out_string);
+}
 
 pub trait StateMachine {
     fn execute(&self, variable_list : &mut Vec<String>, code_list : &Vec<String> , state: usize) -> Result<(usize, Box<dyn StateMachine>),String>;
@@ -109,6 +149,7 @@ impl StateMachine for AssignState {
                 //Regex used to process the assign statement
                 let assign_from_code = Regex::new(r#"let M(\d+) = (([1-9]\d*)|"[a-zA-Z]*")"#).unwrap();
                 let assign_from_memory = Regex::new(r"let M(\d+) = M(\d+)").unwrap();
+                let assign_from_input = Regex::new(r"let M(\d+) = input").unwrap();
 
                 // Check if assigning from a hardcoded value
                 if assign_from_code.is_match(&format!("{}", value)) {
@@ -142,6 +183,18 @@ impl StateMachine for AssignState {
                     Ok((state + 1, get_state(States::ExecuteState)))
 
                     // No valid assign statement
+                } else if assign_from_input.is_match(&format!("{}", value)) {
+                    let assign_tokens = assign_from_input.captures(value).unwrap();
+                    let memory_pos = &assign_tokens[1].parse::<usize>().unwrap(); // get the memory address
+
+                    // Update the given memory address to the new value if it's not out of bounds
+                    // and move back to the execute state.
+                    if variable_list.len() > *memory_pos {
+                        variable_list[*memory_pos] = get_input();
+                        Ok((state + 1, get_state(States::ExecuteState)))
+                    } else {
+                        Err(format!("Accessing register that is not allocated: {}\nAborting", *memory_pos))
+                    }
                 } else {
                     Err(format!("Invalid assign instruction: {}\nAborting...", value))
                 }
@@ -155,6 +208,7 @@ impl StateMachine for AssignState {
 #[cfg(test)]
 mod test {
     use crate::{get_state, States};
+    use crate::states::IO_BUFFER;
     use super::{AssignState, StateMachine, ExecuteState};
 
     #[test]
@@ -174,7 +228,7 @@ mod test {
     }
 
     #[test]
-    fn assign_number_to_memory() {
+    fn assign_number_to_register() {
         let mut memory_vec = vec![String::from("0")];
         let code_vec = vec![String::from("let M0 = 5")];
         AssignState{}.execute(&mut memory_vec, &code_vec, 0);
@@ -182,7 +236,7 @@ mod test {
     }
 
     #[test]
-    fn assign_string_to_memory() {
+    fn assign_string_to_register() {
         let mut memory_vec = vec![String::from(r#""""#)];
         let code_vec = vec![String::from(r#"let M0 = "hello""#)];
         AssignState{}.execute(&mut memory_vec, &code_vec, 0);
@@ -190,10 +244,21 @@ mod test {
     }
 
     #[test]
-    fn assign_from_memory_to_memory() {
+    fn assign_from_register_to_register() {
         let mut memory_vec = vec![String::from("0"), String::from("5")];
         let code_vec = vec![String::from("let M0 = M1")];
         AssignState{}.execute(&mut memory_vec, &code_vec, 0);
         assert_eq!(memory_vec.get(0).unwrap(), "5")
+    }
+
+    #[test]
+    fn assign_register_to_input() {
+        unsafe {
+            IO_BUFFER = String::from("hello")
+        }
+        let mut register_vec = vec![String::from("0")];
+        let code_vec = vec![String::from("let M0 = input")];
+        AssignState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(register_vec.get(0).unwrap(), "hello")
     }
 }
