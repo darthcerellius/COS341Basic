@@ -23,7 +23,7 @@ struct GotoState{}
 struct OutputState{}
 
 lazy_static! {
-    static ref STATES: [(Regex, States); 5] = [
+    static ref TRANSITION_FUNCTIONS: [(Regex, States); 5] = [
         (Regex::new(r"let").unwrap(), States::AssignState),
         (Regex::new(r"goto").unwrap(), States::GotoState),
         (Regex::new("if").unwrap(), States::IfState),
@@ -59,7 +59,7 @@ impl StateMachine for ExecuteState {
         let code = &code_list.get(state);
         match code {
             Some(value) => {
-                for new_state in STATES.iter() {
+                for new_state in TRANSITION_FUNCTIONS.iter() {
                     if new_state.0.is_match(value){
                         return (state, Some(get_state(new_state.1)))
                     }
