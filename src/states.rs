@@ -1,3 +1,4 @@
+use std::fmt::format;
 use std::io;
 use std::process::exit;
 use lazy_static::lazy_static;
@@ -99,6 +100,8 @@ impl StateMachine for ExecuteState {
         let code = &code_list.get(state);
         match code {
             Some(value) => {
+
+                //Find the correct state to move to
                 for new_state in TRANSITION_FUNCTIONS.iter() {
                     if new_state.0.is_match(value){
                         return Ok((state, get_state(new_state.1)));
@@ -120,7 +123,24 @@ impl StateMachine for EndState {
 
 impl StateMachine for GotoState {
     fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
-        Ok((state, get_state(States::QuitState)))
+        let goto_regex = Regex::new(r"goto (\d+)").unwrap();
+        let code = &code_list.get(state);
+        match code {
+            Some(value) => {
+                if goto_regex.is_match(value) {
+                    let goto_capture = goto_regex.captures(value).unwrap();
+                    let goto_ptr = goto_capture[1].parse::<usize>().unwrap();
+                    if goto_ptr >= code_list.len() {
+                        Err(format!("Goto statement points to region out of bounds!\nAborting..."))
+                    } else {
+                        Ok((goto_ptr, get_state(States::ExecuteState)))
+                    }
+                } else {
+                    Err(format!("Invalid goto statement: {}\nAborting...", value))
+                }
+            },
+            None => Ok((state, get_state(States::QuitState)))
+        }
     }
 }
 
