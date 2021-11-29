@@ -2,7 +2,7 @@ use std::fmt::format;
 use std::io;
 use std::process::exit;
 use lazy_static::lazy_static;
-use regex::Regex;
+use regex::{Captures, Regex};
 
 #[cfg(test)]
 static mut IO_BUFFER: String = String::new();
@@ -44,6 +44,25 @@ fn write_output(out_string: String) {
 
 pub trait StateMachine {
     fn execute(&self, variable_list : &mut Vec<String>, code_list : &Vec<String> , state: usize) -> Result<(usize, Box<dyn StateMachine>),String>;
+}
+
+fn fetch_and_execute<T>(
+    code: &Option<&String>,
+    regular_expression: Regex,
+    executor: T,
+    error_msg: &str
+) -> Result<(usize, Box<dyn StateMachine>), String> where T: Fn(&String, Captures) ->
+Result<(usize, Box<dyn StateMachine>), String> {
+    match code {
+        Some(value) => {
+            if regular_expression.is_match(value) {
+                executor(value, regular_expression.captures(value).unwrap())
+            } else {
+                Err(format!("{}: {}\nAborting...", error_msg, value))
+            }
+        },
+        None => Ok((0, get_state(States::QuitState)))
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -98,20 +117,20 @@ pub fn get_state(state_type: States) -> Box<dyn StateMachine> {
 impl StateMachine for ExecuteState {
     fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
         let code = &code_list.get(state);
-        match code {
-            Some(value) => {
-
-                //Find the correct state to move to
-                for new_state in TRANSITION_FUNCTIONS.iter() {
-                    if new_state.0.is_match(value){
-                        return Ok((state, get_state(new_state.1)));
-                    }
-                }
-                return Err(format!("Unknown instruction: {}\nAborting...", value));
-            },
-            // If we have no code to run, go straight to the exit state
-            None => Ok((state, get_state(States::QuitState)))
-        }
+        fetch_and_execute(
+            code,
+          Regex::new("(.*)").unwrap(),
+          |value, _| -> Result<(usize, Box<dyn StateMachine>),String>
+              {
+                  //Find the correct state to move to
+                  for new_state in TRANSITION_FUNCTIONS.iter() {
+                      if new_state.0.is_match(value){
+                          return Ok((state, get_state(new_state.1)));
+                      }
+                  }
+                  return Err(format!("Unknown instruction: {}\nAborting...", value));
+              },
+            "Unknown instruction")
     }
 }
 
@@ -123,36 +142,42 @@ impl StateMachine for EndState {
 
 impl StateMachine for GotoState {
     fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
-        let goto_regex = Regex::new(r"goto (\d+)").unwrap();
         let code = &code_list.get(state);
-        match code {
-            Some(value) => {
-                if goto_regex.is_match(value) {
-                    let goto_capture = goto_regex.captures(value).unwrap();
+        fetch_and_execute(
+            code,
+            Regex::new(r"goto (\d+)").unwrap(),
+            |_, goto_capture| -> Result<(usize, Box<dyn StateMachine>),String>
+                {
                     let goto_ptr = goto_capture[1].parse::<usize>().unwrap();
                     if goto_ptr >= code_list.len() {
                         Err(format!("Goto statement points to region out of bounds!\nAborting..."))
                     } else {
                         Ok((goto_ptr, get_state(States::ExecuteState)))
                     }
-                } else {
-                    Err(format!("Invalid goto statement: {}\nAborting...", value))
-                }
-            },
-            None => Ok((state, get_state(States::QuitState)))
-        }
+                },
+            "Invalid goto statement")
     }
 }
 
 impl StateMachine for IfState {
     fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
+        let goto_regex = Regex::new(r"if M([0-9]+) (<=?|>=?|=|!=) M(\d+) goto (\d+)").unwrap();
         Ok((state, get_state(States::QuitState)))
     }
 }
 
 impl StateMachine for OutputState {
     fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
-        Ok((state, get_state(States::QuitState)))
+        let code = &code_list.get(state);
+        fetch_and_execute(
+            code,
+            Regex::new(r"output (.+)\n").unwrap(),
+            |_, output_capture| -> Result<(usize, Box<dyn StateMachine>),String>
+                {
+                    write_output(output_capture[1].to_string());
+                    Ok((state + 1, get_state(States::ExecuteState)))
+                },
+            "Lolwut")
     }
 }
 
