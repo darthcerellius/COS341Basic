@@ -85,10 +85,10 @@ struct OutputState{}
 lazy_static! {
     static ref TRANSITION_FUNCTIONS: [(Regex, States); 5] = [
         (Regex::new(r"let").unwrap(), States::AssignState),
+        (Regex::new(r"if").unwrap(), States::IfState), //must go before 'goto'
         (Regex::new(r"goto").unwrap(), States::GotoState),
-        (Regex::new("if").unwrap(), States::IfState),
-        (Regex::new("quit").unwrap(), States::QuitState),
-        (Regex::new("output").unwrap(), States::OutputState)
+        (Regex::new(r"quit").unwrap(), States::QuitState),
+        (Regex::new(r"output").unwrap(), States::OutputState)
     ];
 }
 
@@ -136,7 +136,7 @@ impl StateMachine for ExecuteState {
 
 impl StateMachine for EndState {
     fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
-        Ok((state, get_state(States::QuitState)))
+        exit(0);
     }
 }
 
@@ -160,21 +160,60 @@ impl StateMachine for GotoState {
 }
 
 impl StateMachine for IfState {
-    fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
-        let goto_regex = Regex::new(r"if M([0-9]+) (<=?|>=?|=|!=) M(\d+) goto (\d+)").unwrap();
-        Ok((state, get_state(States::QuitState)))
+    fn execute(&self, registers: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
+        let code = &code_list.get(state);
+        fetch_and_execute(
+            code,
+            Regex::new(r"if M([0-9]+) (<=?|>=?|=|!=) M(\d+) goto (\d+)").unwrap(),
+            |value, captures| {
+                let lhs_pos = captures[1].parse::<usize>().unwrap();
+                let rhs_pos = captures[3].parse::<usize>().unwrap();
+                let code_pos = captures[4].parse::<usize>().unwrap();
+                let condition = captures[2].to_string();
+
+                if lhs_pos > registers.len() || rhs_pos > registers.len() {
+                    return Err(format!("Memory index out of bounds!\nAborting"));
+                }
+
+                let lhs_val = registers.get(lhs_pos).unwrap();
+                let rhs_val = registers.get(rhs_pos).unwrap();
+
+                let predicate: fn(&str, &str) -> bool = match condition.as_ref() {
+                    ">=" => |lhs, rhs| {return lhs.ge(rhs)},
+                    ">" => |lhs, rhs| {return lhs.gt(rhs)},
+                    "<=" => |lhs, rhs| {return lhs.le(rhs)},
+                    "<" => |lhs, rhs| {return lhs.lt(rhs)},
+                    "=" => |lhs, rhs| {return lhs.eq(rhs)},
+                    "!=" => |lhs, rhs| {return !lhs.eq(rhs)},
+                    _ => |_, _| {return false}
+                };
+
+                let goto_pos = if predicate(lhs_val, rhs_val) {
+                    code_pos
+                } else {
+                    state + 1
+                };
+                Ok((goto_pos, get_state(States::ExecuteState)))
+            },
+            "Invalid if statement"
+        )
     }
 }
 
 impl StateMachine for OutputState {
-    fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
+    fn execute(&self, registers: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
         let code = &code_list.get(state);
         fetch_and_execute(
             code,
-            Regex::new(r"output (.+)\n").unwrap(),
+            Regex::new(r"output M(\d+)").unwrap(),
             |_, output_capture| -> Result<(usize, Box<dyn StateMachine>),String>
                 {
-                    write_output(output_capture[1].to_string());
+                    let mem_pos = output_capture[1].parse::<usize>().unwrap();
+                    let data = registers.get(mem_pos);
+                    match data {
+                        Some(value) => write_output(value.to_string()),
+                        None => return Err(format!("Memory index out of bounds!\nAborting..."))
+                    }
                     Ok((state + 1, get_state(States::ExecuteState)))
                 },
             "Lolwut")
@@ -192,7 +231,7 @@ impl StateMachine for AssignState {
             Some(value) => {
 
                 //Regex used to process the assign statement
-                let assign_from_code = Regex::new(r#"let M(\d+) = (([1-9]\d*)|"[a-zA-Z]*")"#).unwrap();
+                let assign_from_code = Regex::new(r#"let M(\d+) = (([1-9]\d*)|"[a-zA-Z ]*")"#).unwrap();
                 let assign_from_memory = Regex::new(r"let M(\d+) = M(\d+)").unwrap();
                 let assign_from_input = Regex::new(r"let M(\d+) = input").unwrap();
 
