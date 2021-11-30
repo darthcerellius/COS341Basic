@@ -1,8 +1,8 @@
-use std::fmt::format;
 use std::io;
 use std::process::exit;
 use lazy_static::lazy_static;
 use regex::{Captures, Regex};
+use num_integer::div_rem;
 
 #[cfg(test)]
 static mut IO_BUFFER: String = String::new();
@@ -27,7 +27,7 @@ fn get_input() -> String {
             exit(-1);
         }
     }
-    input
+    input.trim().to_string()
 }
 
 #[cfg(test)]
@@ -43,15 +43,15 @@ fn write_output(out_string: String) {
 }
 
 pub trait StateMachine {
-    fn execute(&self, variable_list : &mut Vec<String>, code_list : &Vec<String> , state: usize) -> Result<(usize, Box<dyn StateMachine>),String>;
+    fn execute(&self, registers : &mut Vec<String>, code_list : &Vec<String> , state: usize) -> Result<(usize, Box<dyn StateMachine>),String>;
 }
 
 fn fetch_and_execute<T>(
     code: &Option<&String>,
     regular_expression: Regex,
-    executor: T,
+    mut executor: T,
     error_msg: &str
-) -> Result<(usize, Box<dyn StateMachine>), String> where T: Fn(&String, Captures) ->
+) -> Result<(usize, Box<dyn StateMachine>), String> where T: FnMut(&String, Captures) ->
 Result<(usize, Box<dyn StateMachine>), String> {
     match code {
         Some(value) => {
@@ -72,7 +72,8 @@ pub enum States {
     GotoState,
     IfState,
     QuitState,
-    OutputState
+    OutputState,
+    MathState
 }
 
 struct EndState {}
@@ -81,6 +82,7 @@ struct ExecuteState {}
 struct IfState{}
 struct GotoState{}
 struct OutputState{}
+struct MathState {}
 
 lazy_static! {
     static ref TRANSITION_FUNCTIONS: [(Regex, States); 5] = [
@@ -111,11 +113,12 @@ pub fn get_state(state_type: States) -> Box<dyn StateMachine> {
         States::QuitState => Box::new(EndState{}),
         States::OutputState => Box::new(OutputState{}),
         States::ExecuteState => Box::new(ExecuteState{}),
+        States::MathState => Box::new(MathState{}),
     }
 }
 
 impl StateMachine for ExecuteState {
-    fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
+    fn execute(&self, _: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
         let code = &code_list.get(state);
         fetch_and_execute(
             code,
@@ -135,13 +138,13 @@ impl StateMachine for ExecuteState {
 }
 
 impl StateMachine for EndState {
-    fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
+    fn execute(&self, _: &mut Vec<String>, _: &Vec<String>, _: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
         exit(0);
     }
 }
 
 impl StateMachine for GotoState {
-    fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
+    fn execute(&self, _: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
         let code = &code_list.get(state);
         fetch_and_execute(
             code,
@@ -165,7 +168,7 @@ impl StateMachine for IfState {
         fetch_and_execute(
             code,
             Regex::new(r"if M([0-9]+) (<=?|>=?|=|!=) M(\d+) goto (\d+)").unwrap(),
-            |value, captures| {
+            |_, captures| {
                 let lhs_pos = captures[1].parse::<usize>().unwrap();
                 let rhs_pos = captures[3].parse::<usize>().unwrap();
                 let code_pos = captures[4].parse::<usize>().unwrap();
@@ -221,7 +224,7 @@ impl StateMachine for OutputState {
 }
 
 impl StateMachine for AssignState {
-    fn execute(&self, variable_list: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
+    fn execute(&self, registers: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
         let code = &code_list.get(state); // get the line of code
 
         //ensure that we actually have a line of code to work with
@@ -234,6 +237,7 @@ impl StateMachine for AssignState {
                 let assign_from_code = Regex::new(r#"let M(\d+) = (([1-9]\d*)|"[a-zA-Z ]*")"#).unwrap();
                 let assign_from_memory = Regex::new(r"let M(\d+) = M(\d+)").unwrap();
                 let assign_from_input = Regex::new(r"let M(\d+) = input").unwrap();
+                let assign_from_operation = Regex::new(r"let M(\d+) = M(\d+) ([+\-*/]) M(\d+)").unwrap();
 
                 // Check if assigning from a hardcoded value
                 if assign_from_code.is_match(&format!("{}", value)) {
@@ -242,43 +246,45 @@ impl StateMachine for AssignState {
 
                     // Update the given memory address to the new value if it's not out of bounds
                     // and move back to the execute state.
-                    if variable_list.len() > *memory_pos {
-                        variable_list[*memory_pos] = (&assign_tokens[2]).parse::<String>().unwrap().replace("\"", "");
+                    if registers.len() > *memory_pos {
+                        registers[*memory_pos] = (&assign_tokens[2]).parse::<String>().unwrap().replace("\"", "");
                         Ok((state + 1, get_state(States::ExecuteState)))
                     } else {
                         Err(format!("Accessing register that is not allocated: {}\nAborting", *memory_pos))
                     }
 
-                    // Check if assigning from memory
-                } else if assign_from_memory.is_match(&format!("{}", value)) {
-                    let assign_tokens = assign_from_memory.captures(value).unwrap();
-                    let lhs_pos = &assign_tokens[1].parse::<usize>().unwrap(); // get the memory address for LHS
-                    let rhs_pos = &assign_tokens[2].parse::<usize>().unwrap(); // get the memory address for RHS
-
-                    if variable_list.len() < *lhs_pos {
-                        return Err(format!("Accessing register that is not allocated: {}\nAborting", *lhs_pos));
-                    }
-
-                    if variable_list.len() < *rhs_pos {
-                        return Err(format!("Accessing register that is not allocated: {}\nAborting", *rhs_pos));
-                    }
-
-                    variable_list[*lhs_pos] = (variable_list[*rhs_pos]).parse().unwrap();
-                    Ok((state + 1, get_state(States::ExecuteState)))
-
-                    // No valid assign statement
+                    // Check if assigning from operation
+                } else if assign_from_operation.is_match(&format!("{}", value)) {
+                    Ok((state, get_state(States::MathState)))
                 } else if assign_from_input.is_match(&format!("{}", value)) {
                     let assign_tokens = assign_from_input.captures(value).unwrap();
                     let memory_pos = &assign_tokens[1].parse::<usize>().unwrap(); // get the memory address
 
                     // Update the given memory address to the new value if it's not out of bounds
                     // and move back to the execute state.
-                    if variable_list.len() > *memory_pos {
-                        variable_list[*memory_pos] = get_input();
+                    if registers.len() > *memory_pos {
+                        registers[*memory_pos] = get_input();
                         Ok((state + 1, get_state(States::ExecuteState)))
                     } else {
                         Err(format!("Accessing register that is not allocated: {}\nAborting", *memory_pos))
                     }
+                    // Check if assigning from operation
+                } else if assign_from_memory.is_match(&format!("{}", value)) {
+                    let assign_tokens = assign_from_memory.captures(value).unwrap();
+                    let lhs_pos = &assign_tokens[1].parse::<usize>().unwrap(); // get the memory address for LHS
+                    let rhs_pos = &assign_tokens[2].parse::<usize>().unwrap(); // get the memory address for RHS
+
+                    if registers.len() < *lhs_pos {
+                        return Err(format!("Accessing register that is not allocated: {}\nAborting", *lhs_pos));
+                    }
+
+                    if registers.len() < *rhs_pos {
+                        return Err(format!("Accessing register that is not allocated: {}\nAborting", *rhs_pos));
+                    }
+
+                    registers[*lhs_pos] = (registers[*rhs_pos]).parse().unwrap();
+                    Ok((state + 1, get_state(States::ExecuteState)))
+                    // No valid assign statement
                 } else {
                     Err(format!("Invalid assign instruction: {}\nAborting...", value))
                 }
@@ -286,6 +292,63 @@ impl StateMachine for AssignState {
             // If we have no code to run, go straight to the exit state
             None => Ok((state, get_state(States::QuitState)))
         }
+    }
+}
+
+impl StateMachine for MathState {
+    fn execute(&self, registers: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>), String> {
+        let code = &code_list.get(state);
+        fetch_and_execute(
+            code,
+            Regex::new(r"M(\d+) = M(\d+) ([+\-*/]) M(\d+)").unwrap(),
+            |_, captures| {
+                let lhs_pos = captures[2].parse::<usize>().unwrap();
+                let rhs_pos = captures[4].parse::<usize>().unwrap();
+                let assign_pos = captures[1].parse::<usize>().unwrap();
+                let operation = captures[3].to_string();
+
+                if lhs_pos > registers.len() || rhs_pos > registers.len() {
+                    return Err(format!("Memory index out of bounds!\nAborting"));
+                }
+
+                let lhs_val = registers.get(lhs_pos).unwrap().parse::<i128>();
+                let rhs_val = registers.get(rhs_pos).unwrap().parse::<i128>();
+
+                if lhs_val.is_err() {
+                    return Err(format!("LHS register is not a number!\nAborting..."));
+                }
+                if rhs_val.is_err() {
+                    return Err(format!("RHS register is not a number!\nAborting..."));
+                }
+                let result = match operation.as_ref() {
+                    "*" => format!("{}", lhs_val.unwrap() * rhs_val.unwrap()),
+                    "/" => {
+                        let result = div_rem(lhs_val.unwrap(), rhs_val.unwrap());
+                        format!("{}.{}", result.0, result.1)
+                    },
+                    "+" => format!("{}", lhs_val.unwrap() + rhs_val.unwrap()),
+                    "-" => format!("{}", lhs_val.unwrap() - rhs_val.unwrap()),
+                    _ =>  panic!()
+                };
+
+                //assign the quotient and division to two registers
+                if result.contains(".") {
+
+                    //ensure that we can write the remainder to a register
+                    if assign_pos >= registers.len() {
+                        return Err(format!("Division statement cannot write to register not allocated!\nAborting..."));
+                    }
+                    let division: Vec<&str> = result.split(r".").collect();
+                    registers[assign_pos] = division[0].to_string();
+                    registers[assign_pos+1] = division[1].to_string();
+                } else {
+                    registers[assign_pos] = result;
+                }
+
+                Ok((state+1, get_state(States::ExecuteState)))
+            },
+            "Lolwut"
+        )
     }
 }
 
