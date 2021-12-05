@@ -286,6 +286,7 @@ impl StateMachine for AssignState {
                         Err(format!("Accessing register that is not allocated: {}\nAborting", *memory_pos))
                     }
                     // Check if assigning from operation
+
                 } else if assign_from_memory.is_match(&format!("{}", value)) {
                     let assign_tokens = assign_from_memory.captures(value).unwrap();
                     let lhs_pos = &assign_tokens[1].parse::<usize>().unwrap(); // get the memory address for LHS

@@ -355,4 +355,14 @@ mod test {
         assert_eq!(result.as_ref().ok().unwrap().0, empty_vec.clone());
         assert_eq!(result.as_ref().ok().unwrap().1, empty_vec);
     }
+
+    #[test]
+    fn load_file_with_empty_segments(){
+        let result = load_code_from_file("testfiles/test8.txt".to_string());
+
+        let empty_vec : Vec<String> = Vec::new();
+
+        assert_eq!(result.as_ref().ok().unwrap().0, empty_vec.clone());
+        assert_eq!(result.as_ref().ok().unwrap().1, empty_vec);
+    }
 }
