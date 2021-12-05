@@ -370,8 +370,8 @@ impl StateMachine for MathState {
 #[cfg(test)]
 mod test {
     use crate::{get_state, States};
-    use crate::states::IO_BUFFER;
-    use super::{AssignState, StateMachine, ExecuteState, OutputState};
+    use crate::states::{GotoState, IO_BUFFER};
+    use super::{AssignState, StateMachine, ExecuteState, OutputState, IfState};
 
     #[test]
     fn check_that_start_returns_0() {
@@ -459,5 +459,37 @@ mod test {
             IO_BUFFER = old_str;
         }
         assert_eq!("meme", output_str);
+    }
+
+    #[test]
+    fn goto_valid_block() {
+        let mut register_vec: Vec<String> = Vec::new();
+        let code_vec = vec![String::from("goto 2"), String::from("quit"), String::from("quit")];
+        let res = GotoState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(res.unwrap().0, 2)
+    }
+
+    #[test]
+    fn goto_invalid_block() {
+        let mut register_vec: Vec<String> = Vec::new();
+        let code_vec = vec![String::from("goto 4"), String::from("quit"), String::from("quit")];
+        let res = GotoState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(res.err().unwrap(), "Goto statement points to region out of bounds!\nAborting...")
+    }
+
+    #[test]
+    fn if_tests_true() {
+        let mut register_vec = vec![String::from("0"), String::from("1")];
+        let code_vec = vec![String::from("if M0 < M1 goto 2"), String::from("quit"), String::from("quit")];
+        let res = IfState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(res.unwrap().0, 2)
+    }
+
+    #[test]
+    fn if_tests_false() {
+        let mut register_vec = vec![String::from("0"), String::from("1")];
+        let code_vec = vec![String::from("if M0 > M1 goto 2"), String::from("quit"), String::from("quit")];
+        let res = IfState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(res.unwrap().0, 1)
     }
 }
