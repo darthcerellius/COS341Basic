@@ -3,6 +3,8 @@ use std::io;
 use lazy_static::lazy_static;
 use regex::{Captures, Regex};
 use num_integer::div_rem;
+use rand::Rng;
+use std::{thread, time::Duration};
 
 #[cfg(test)]
 static mut IO_BUFFER: String = String::new();
@@ -189,7 +191,7 @@ impl StateMachine for IfState {
                 let code_pos = captures[4].parse::<usize>().unwrap();
                 let condition = captures[2].to_string();
 
-                if lhs_pos > registers.len() || rhs_pos > registers.len() {
+                if lhs_pos >= registers.len() || rhs_pos >= registers.len() {
                     return Err(format!("Memory index out of bounds!\nAborting"));
                 }
 
@@ -261,7 +263,7 @@ impl StateMachine for AssignState {
 
                     // Update the given memory address to the new value if it's not out of bounds
                     // and move back to the execute state.
-                    if registers.len() > *memory_pos {
+                    if registers.len() >= *memory_pos {
                         registers[*memory_pos] = (&assign_tokens[2]).parse::<String>().unwrap().replace("\"", "");
                         Ok((state + 1, get_state(States::ExecuteState)))
                     } else {
@@ -369,6 +371,9 @@ impl StateMachine for MathState {
 
 #[cfg(test)]
 mod test {
+    use std::thread;
+    use std::time::Duration;
+    use rand::Rng;
     use crate::{get_state, States};
     use crate::states::{EndState, GotoState, IO_BUFFER, IS_EXIT, MathState};
     use super::{AssignState, StateMachine, ExecuteState, OutputState, IfState};
@@ -445,6 +450,11 @@ mod test {
 
     #[test]
     fn output_str_register() {
+
+        //Hack to stop static global variable for being accessed by multiple tests simultaneously
+        let sleep_time = rand::thread_rng().gen_range(100..500);
+        thread::sleep(Duration::from_millis(sleep_time));
+
         //Save the static global variable to ensure other test data is saved
         let mut old_str = String::new();
         unsafe {
@@ -584,5 +594,101 @@ mod test {
         let code_vec = vec![String::from("go to 0")];
         let res = ExecuteState{}.execute(&mut register_vec, &code_vec, 0);
         assert_eq!(res.err().unwrap(), "Unknown instruction: go to 0\nAborting...")
+    }
+
+    #[test]
+    fn assign_from_invalid_register_lhs() {
+        let mut register_vec = vec![String::from("0")];
+        let code_vec = vec![String::from("let M0 = M1")];
+        let res = AssignState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(res.err().unwrap(), "Accessing register that is not allocated: 1\nAborting")
+    }
+
+    #[test]
+    fn assign_from_invalid_register_rhs() {
+        let mut register_vec = vec![String::from("0")];
+        let code_vec = vec![String::from("let M1 = M0")];
+        let res = AssignState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(res.err().unwrap(), "Accessing register that is not allocated: 1\nAborting")
+    }
+
+    #[test]
+    fn goto_invalid_goto() {
+        let mut register_vec = vec![String::from("0")];
+        let code_vec = vec![String::from("goto e")];
+        let res = GotoState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(res.err().unwrap(), "Invalid goto statement: goto e\nAborting...")
+    }
+
+    #[test]
+    fn assign_invalid_assign_rhs() {
+        let mut register_vec = vec![String::from("0")];
+        let code_vec = vec![String::from("let M0 = e")];
+        let res = AssignState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(res.err().unwrap(), "Invalid assign instruction: let M0 = e\nAborting...")
+    }
+
+    #[test]
+    fn assign_invalid_assign_lhs() {
+        let mut register_vec = vec![String::from("0")];
+        let code_vec = vec![String::from("let e = M0")];
+        let res = AssignState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(res.err().unwrap(), "Invalid assign instruction: let e = M0\nAborting...")
+    }
+
+    #[test]
+    fn if_invalid_lhs_reg_index() {
+        let mut register_vec = vec![String::from("0")];
+        let code_vec = vec![String::from("if M1 != M0 goto 0")];
+        let res = IfState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(res.err().unwrap(), "Memory index out of bounds!\nAborting")
+    }
+
+    #[test]
+    fn if_invalid_rhs_reg_index() {
+        let mut register_vec = vec![String::from("0")];
+        let code_vec = vec![String::from("if M0 != M1 goto 0")];
+        let res = IfState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(res.err().unwrap(), "Memory index out of bounds!\nAborting")
+    }
+
+    #[test]
+    fn if_invalid_lhs_code() {
+        let mut register_vec = vec![String::from("0")];
+        let code_vec = vec![String::from("if e != M0 goto 0")];
+        let res = IfState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(res.err().unwrap(), "Invalid if statement: if e != M0 goto 0\nAborting...")
+    }
+
+    #[test]
+    fn if_invalid_rhs_code() {
+        let mut register_vec = vec![String::from("0")];
+        let code_vec = vec![String::from("if M0 != e goto 0")];
+        let res = IfState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(res.err().unwrap(), "Invalid if statement: if M0 != e goto 0\nAborting...")
+    }
+    #[test]
+    fn if_test_predicates() {
+        let mut register_vec = vec![String::from("0"), String::from("1")];
+        let code_vec = vec![
+            String::from("if M0 != M1 goto 5"),
+            String::from("if M0 < M1 goto 5"),
+            String::from("if M0 <= M1 goto 5"),
+            String::from("if M0 > M1 goto 5"),
+            String::from("if M0 >= M1 goto 5"),
+            String::from("if M0 = M1 goto 5"),
+        ];
+        let mut res = IfState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(res.unwrap().0, 5);
+        res = IfState{}.execute(&mut register_vec, &code_vec, 1);
+        assert_eq!(res.unwrap().0, 5);
+        res = IfState{}.execute(&mut register_vec, &code_vec, 2);
+        assert_eq!(res.unwrap().0, 5);
+        res = IfState{}.execute(&mut register_vec, &code_vec, 3);
+        assert_eq!(res.unwrap().0, 4);
+        res = IfState{}.execute(&mut register_vec, &code_vec, 4);
+        assert_eq!(res.unwrap().0, 5);
+        res = IfState{}.execute(&mut register_vec, &code_vec, 5);
+        assert_eq!(res.unwrap().0, 6);
     }
 }
