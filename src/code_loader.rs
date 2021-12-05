@@ -1,6 +1,6 @@
 use std::fs;
 use regex::Regex;
-use crate::errors::segment_errors::{error, ErrorTypes, SegmentErrorTypes};
+use crate::errors::segment_errors::{error, ERROR_MESSAGES, ErrorTypes, SegmentErrorTypes};
 
 /// Loads COS341Basic data from a file and creates two vectors, one for the register data and
 /// the other for the code data. If an error is encountered while loading program data, a
@@ -47,7 +47,7 @@ pub fn load_code_from_file(file_path: String) -> Result<(Vec<String>, Vec<String
                 let register_segment = load_variable_segment(file_string[s_pos..e_pos].as_ref());
 
                 if register_segment.is_err() {
-                    return Err(register_segment.err().unwrap().to_string());
+                    return Err(ERROR_MESSAGES[register_segment.err().unwrap() as usize].parse().unwrap());
                 }
                 register_segment.unwrap()
             } else {
@@ -61,7 +61,7 @@ pub fn load_code_from_file(file_path: String) -> Result<(Vec<String>, Vec<String
                 let code_segment = load_code_segment(file_string[s_pos..e_pos].as_ref());
 
                 if code_segment.is_err() {
-                    return Err(code_segment.err().unwrap().to_string());
+                    return Err(ERROR_MESSAGES[code_segment.err().unwrap() as usize].parse().unwrap());
                 }
                 code_segment.unwrap()
             } else {
@@ -80,13 +80,13 @@ pub fn load_code_from_file(file_path: String) -> Result<(Vec<String>, Vec<String
 /// containing the data in a 1:1 mapping according to the index of the data in the string
 ///
 /// # Arguments
-/// * `segment_error_type` - Tells the function which segment type error codes the function returns should
+/// * segment_error_type - Tells the function which segment type error codes the function returns should
 ///                          the parser encounter any error.
-/// * `variable_string` - A string that holds variable data in the format 'index value'. Each variable
+/// * variable_string - A string that holds variable data in the format 'index value'. Each variable
 ///                       in this string is separated by '\n' or '\r\n'.
 /// # Returns
-/// * `Ok(Vec<String>)` - An array holding the declared values.
-/// * `Err(u32)` - An error code. This happens when there was an error parsing the variable string.
+/// * Ok(Vec<String>) - An array holding the declared values.
+/// * Err(u32) - An error code. This happens when there was an error parsing the variable string.
 ///
 /// # Examples
 ///
@@ -336,14 +336,14 @@ mod test {
 
         let result = load_code_from_file("testfiles/test6.txt".to_string());
 
-        assert_eq!(result.as_ref().err().unwrap(), "5");
+        assert_eq!(result.as_ref().err().unwrap(), ERROR_MESSAGES[5]);
     }
 
     #[test]
     fn load_code_with_code_error() {
         let result = load_code_from_file("testfiles/test7.txt".to_string());
 
-        assert_eq!(result.as_ref().err().unwrap(), "8");
+        assert_eq!(result.as_ref().err().unwrap(), ERROR_MESSAGES[8]);
     }
 
     #[test]
