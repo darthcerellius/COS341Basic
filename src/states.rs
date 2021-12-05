@@ -1,11 +1,25 @@
-use std::io;
 use std::process::exit;
+use std::io;
 use lazy_static::lazy_static;
 use regex::{Captures, Regex};
 use num_integer::div_rem;
 
 #[cfg(test)]
 static mut IO_BUFFER: String = String::new();
+#[cfg(test)]
+static mut IS_EXIT: bool = false;
+
+#[cfg(test)]
+fn do_exit() {
+    unsafe {
+        IS_EXIT = true
+    }
+}
+
+#[cfg(not(test))]
+fn do_exit() {
+    exit(0);
+}
 
 #[cfg(test)]
 fn get_input() -> String {
@@ -139,7 +153,8 @@ impl StateMachine for ExecuteState {
 
 impl StateMachine for EndState {
     fn execute(&self, _: &mut Vec<String>, _: &Vec<String>, _: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
-        exit(0);
+        do_exit();
+        Err(format!("Exit"))
     }
 }
 
@@ -356,7 +371,7 @@ impl StateMachine for MathState {
 mod test {
     use crate::{get_state, States};
     use crate::states::IO_BUFFER;
-    use super::{AssignState, StateMachine, ExecuteState};
+    use super::{AssignState, StateMachine, ExecuteState, OutputState};
 
     #[test]
     fn check_that_start_returns_0() {
@@ -407,5 +422,42 @@ mod test {
         let code_vec = vec![String::from("let M0 = input")];
         AssignState{}.execute(&mut register_vec, &code_vec, 0);
         assert_eq!(register_vec.get(0).unwrap(), "hello")
+    }
+
+    #[test]
+    fn output_int_register() {
+
+        //Save the static global variable to ensure other test data is saved
+        let mut old_str = String::new();
+        unsafe {
+            old_str = IO_BUFFER.clone();
+        }
+        let mut register_vec = vec![String::from("5")];
+        let code_vec = vec![String::from("output M0")];
+        OutputState{}.execute(&mut register_vec, &code_vec, 0);
+        let mut output_str = String::new();
+        unsafe {
+            output_str = IO_BUFFER.clone();
+            IO_BUFFER = old_str;
+        }
+        assert_eq!("5", output_str);
+    }
+
+    #[test]
+    fn output_str_register() {
+        //Save the static global variable to ensure other test data is saved
+        let mut old_str = String::new();
+        unsafe {
+            old_str = IO_BUFFER.clone();
+        }
+        let mut register_vec = vec![String::from("meme")];
+        let code_vec = vec![String::from("output M0")];
+        OutputState{}.execute(&mut register_vec, &code_vec, 0);
+        let mut output_str = String::new();
+        unsafe {
+            output_str = IO_BUFFER.clone();
+            IO_BUFFER = old_str;
+        }
+        assert_eq!("meme", output_str);
     }
 }
