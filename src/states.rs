@@ -289,11 +289,11 @@ impl StateMachine for AssignState {
                     let lhs_pos = &assign_tokens[1].parse::<usize>().unwrap(); // get the memory address for LHS
                     let rhs_pos = &assign_tokens[2].parse::<usize>().unwrap(); // get the memory address for RHS
 
-                    if registers.len() < *lhs_pos {
+                    if registers.len() <= *lhs_pos {
                         return Err(format!("Accessing register that is not allocated: {}\nAborting", *lhs_pos));
                     }
 
-                    if registers.len() < *rhs_pos {
+                    if registers.len() <= *rhs_pos {
                         return Err(format!("Accessing register that is not allocated: {}\nAborting", *rhs_pos));
                     }
 
@@ -322,7 +322,7 @@ impl StateMachine for MathState {
                 let assign_pos = captures[1].parse::<usize>().unwrap();
                 let operation = captures[3].to_string();
 
-                if lhs_pos > registers.len() || rhs_pos > registers.len() {
+                if lhs_pos >= registers.len() || rhs_pos >= registers.len() {
                     return Err(format!("Memory index out of bounds!\nAborting"));
                 }
 
@@ -350,7 +350,7 @@ impl StateMachine for MathState {
                 if result.contains(".") {
 
                     //ensure that we can write the remainder to a register
-                    if assign_pos >= registers.len() {
+                    if assign_pos + 1 >= registers.len() {
                         return Err(format!("Division statement cannot write to register not allocated!\nAborting..."));
                     }
                     let division: Vec<&str> = result.split(r".").collect();
@@ -370,7 +370,7 @@ impl StateMachine for MathState {
 #[cfg(test)]
 mod test {
     use crate::{get_state, States};
-    use crate::states::{GotoState, IO_BUFFER};
+    use crate::states::{EndState, GotoState, IO_BUFFER, IS_EXIT, MathState};
     use super::{AssignState, StateMachine, ExecuteState, OutputState, IfState};
 
     #[test]
@@ -491,5 +491,72 @@ mod test {
         let code_vec = vec![String::from("if M0 > M1 goto 2"), String::from("quit"), String::from("quit")];
         let res = IfState{}.execute(&mut register_vec, &code_vec, 0);
         assert_eq!(res.unwrap().0, 1)
+    }
+
+    #[test]
+    fn math_add() {
+        let mut register_vec = vec![String::from("1"), String::from("1"), String::from("0")];
+        let code_vec = vec![String::from("M2 = M0 + M1")];
+        let res = MathState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(register_vec.get(2).unwrap(), "2")
+    }
+
+    #[test]
+    fn math_sub() {
+        let mut register_vec = vec![String::from("1"), String::from("1"), String::from("0")];
+        let code_vec = vec![String::from("M2 = M0 - M1")];
+        let res = MathState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(register_vec.get(2).unwrap(), "0")
+    }
+
+    #[test]
+    fn math_mult() {
+        let mut register_vec = vec![String::from("2"), String::from("4"), String::from("0")];
+        let code_vec = vec![String::from("M2 = M0 * M1")];
+        let res = MathState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(register_vec.get(2).unwrap(), "8")
+    }
+
+    #[test]
+    fn math_div() {
+        let mut register_vec = vec![String::from("5"), String::from("2"), String::from("0"), String::from("0")];
+        let code_vec = vec![String::from("M2 = M0 / M1")];
+        let res = MathState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(register_vec.get(2).unwrap(), "2");
+        assert_eq!(register_vec.get(3).unwrap(), "1")
+    }
+
+    #[test]
+    fn math_div_no_space() {
+        let mut register_vec = vec![String::from("5"), String::from("2"), String::from("0")];
+        let code_vec = vec![String::from("M2 = M0 / M1")];
+        let res = MathState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(res.err().unwrap(), "Division statement cannot write to register not allocated!\nAborting...")
+    }
+
+    #[test]
+    fn math_lhs_not_number() {
+        let mut register_vec = vec![String::from("hi"), String::from("5"), String::from("0")];
+        let code_vec = vec![String::from("M2 = M0 / M1")];
+        let res = MathState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(res.err().unwrap(), "LHS register is not a number!\nAborting...")
+    }
+
+    #[test]
+    fn math_rhs_not_number() {
+        let mut register_vec = vec![String::from("5"), String::from("hi"), String::from("0")];
+        let code_vec = vec![String::from("M2 = M0 / M1")];
+        let res = MathState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(res.err().unwrap(), "RHS register is not a number!\nAborting...")
+    }
+    #[test]
+    fn end_state_quits_program() {
+        let mut register_vec: Vec<String> = vec![];
+        let code_vec = vec![String::from("quit")];
+        let res = EndState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(res.err().unwrap(), "Exit");
+        unsafe {
+            assert_eq!(IS_EXIT, true)
+        }
     }
 }
