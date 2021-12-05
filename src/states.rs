@@ -277,7 +277,7 @@ impl StateMachine for AssignState {
 
                     // Update the given memory address to the new value if it's not out of bounds
                     // and move back to the execute state.
-                    if registers.len() > *memory_pos {
+                    if registers.len() >= *memory_pos {
                         registers[*memory_pos] = get_input();
                         Ok((state + 1, get_state(States::ExecuteState)))
                     } else {
@@ -558,5 +558,31 @@ mod test {
         unsafe {
             assert_eq!(IS_EXIT, true)
         }
+    }
+
+    #[test]
+    fn assign_state_returns_math_state() {
+        let mut register_vec = vec![String::from("2"), String::from("4"), String::from("0")];
+        let code_vec = vec![String::from("let M2 = M0 * M1")];
+        let mut res = AssignState{}.execute(&mut register_vec, &code_vec, 0);
+        let state = res.as_ref().unwrap().0;
+        res = res.as_ref().unwrap().1.execute(&mut register_vec, &code_vec, state);
+        assert_eq!(register_vec.get(2).unwrap(), "8")
+    }
+
+    #[test]
+    fn output_access_invalid_register() {
+        let mut register_vec = vec![String::from("0")];
+        let code_vec = vec![String::from("output M2")];
+        let res = OutputState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(res.err().unwrap(), "Memory index out of bounds!\nAborting...")
+    }
+
+    #[test]
+    fn execute_invalid_instruction() {
+        let mut register_vec = vec![String::from("0")];
+        let code_vec = vec![String::from("go to 0")];
+        let res = ExecuteState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(res.err().unwrap(), "Unknown instruction: go to 0\nAborting...")
     }
 }
