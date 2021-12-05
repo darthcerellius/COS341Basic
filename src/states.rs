@@ -263,7 +263,7 @@ impl StateMachine for AssignState {
 
                     // Update the given memory address to the new value if it's not out of bounds
                     // and move back to the execute state.
-                    if registers.len() >= *memory_pos {
+                    if registers.len() > *memory_pos {
                         registers[*memory_pos] = (&assign_tokens[2]).parse::<String>().unwrap().replace("\"", "");
                         Ok((state + 1, get_state(States::ExecuteState)))
                     } else {
@@ -690,5 +690,21 @@ mod test {
         assert_eq!(res.unwrap().0, 5);
         res = IfState{}.execute(&mut register_vec, &code_vec, 5);
         assert_eq!(res.unwrap().0, 6);
+    }
+
+    #[test]
+    fn assign_code_invalid_register() {
+        let mut register_vec = vec![String::from("0")];
+        let code_vec = vec![String::from("let M1 = 5")];
+        let res = AssignState{}.execute(&mut register_vec, &code_vec, 0);
+        assert_eq!(res.err().unwrap(), "Accessing register that is not allocated: 1\nAborting")
+    }
+    #[test]
+    fn assign_reach_end_of_code() {
+        let mut register_vec = vec![String::from("0")];
+        let code_vec = vec![String::from("let M1 = 5")];
+        let mut res = AssignState{}.execute(&mut register_vec, &code_vec, 1);
+        res = res.unwrap().1.execute(&mut register_vec,&code_vec, 1);
+        assert_eq!(res.err().unwrap(), "Exit")
     }
 }
