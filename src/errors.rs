@@ -1,4 +1,18 @@
 pub mod segment_errors {
+    use lazy_static::lazy_static;
+    lazy_static! {
+    pub static ref ERROR_MESSAGES: [&'static str; 9] = [
+            "Ok",
+            "No register segment found!",
+            "No code segment found!",
+            "Malformed register assignment found!",
+            "Malformed code assignment found!",
+            "Register declaration not in chronological order!",
+            "Code lines are not in chronological order!",
+            "Malformed register segment found!",
+            "Malformed code segment found!",
+    ];
+}
 
     pub enum ErrorTypes {
         NoSegment,
