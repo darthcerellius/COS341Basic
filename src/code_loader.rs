@@ -21,6 +21,7 @@ pub fn load_code_from_file(file_path: String) -> Result<(Vec<String>, Vec<String
             const BEGIN_CODE_SEGMENT: &str = "BEGIN_CODE_SEGMENT\n";
             const END_CODE_SEGMENT: &str = "\nEND_CODE_SEGMENT";
 
+            //find segment offsets
             let reg_start_pos = file_string.find(BEGIN_REGISTER_SEGMENT);
             let reg_end_pos = file_string.find(END_REGISTER_SEGMENT);
             let code_start_pos = file_string.find(BEGIN_CODE_SEGMENT);
@@ -40,6 +41,7 @@ pub fn load_code_from_file(file_path: String) -> Result<(Vec<String>, Vec<String
                 return Err("Code segment not fully defined! Aborting...".to_string());
             }
 
+            //Load registers into memory
             let mut s_pos = reg_start_pos.unwrap() + BEGIN_REGISTER_SEGMENT.len();
             let mut e_pos = reg_end_pos.unwrap();
 
@@ -54,6 +56,7 @@ pub fn load_code_from_file(file_path: String) -> Result<(Vec<String>, Vec<String
                 Vec::new()
             };
 
+            //Load code into memory
             s_pos = code_start_pos.unwrap() + BEGIN_CODE_SEGMENT.len();
             e_pos = code_end_pos.unwrap();
 
@@ -80,16 +83,15 @@ pub fn load_code_from_file(file_path: String) -> Result<(Vec<String>, Vec<String
 /// containing the data in a 1:1 mapping according to the index of the data in the string
 ///
 /// # Arguments
-/// * segment_error_type - Tells the function which segment type error codes the function returns should
+/// * `segment_error_type` - Tells the function which segment type error codes the function returns should
 ///                          the parser encounter any error.
-/// * variable_string - A string that holds variable data in the format 'index value'. Each variable
+/// * `variable_string` - A string that holds variable data in the format 'index value'. Each variable
 ///                       in this string is separated by '\n' or '\r\n'.
 /// # Returns
-/// * Ok(Vec<String>) - An array holding the declared values.
-/// * Err(u32) - An error code. This happens when there was an error parsing the variable string.
+/// * `Ok(Vec<String>)` - An array holding the declared values.
+/// * `Err(u32)` - An error code. This happens when there was an error parsing the variable string.
 ///
 /// # Examples
-///
 /// ```
 /// let expected_result = VariableErrorCodes{
 ///             error: ErrorTypes::MalformedAssignment
@@ -103,14 +105,17 @@ fn load_segment(segment_error_type: SegmentErrorTypes, variable_string: &str, sp
     let mut err = error(&segment_error_type, ErrorTypes::AllOk).value();
     let mut variable_index = 0;
 
+    //return empty array if no registers are declared
     if variable_string.len() == 0 {
         return Ok(memory_vec)
     }
 
+    //Register segment was not declared correctly
     if !split_regex.is_match(variable_string.trim()) {
         return Err(error(&segment_error_type, ErrorTypes::MalformedSegment).value());
     }
 
+    //split the string by lines
     let variables = Regex::new(r"(\n|\r\n)").unwrap()
         .split(variable_string)
         .collect::<Vec<&str>>();
@@ -151,11 +156,23 @@ fn load_segment(segment_error_type: SegmentErrorTypes, variable_string: &str, sp
     }
 }
 
+///Uses the load_segment function to load registers into memory.
+/// # Arguments
+///  * - `segment` - String slice containing segment data
+/// # Returns
+/// * Ok(Vec<String>) - An array of registers for the program to use.
+/// * Err(u32) - An error code. This happens when there was an error parsing the register string.
 fn load_variable_segment(segment: &str) -> Result<Vec<String>, u32> {
     let var_regex = Regex::new(r#"^(\d+) (\w+)"#).unwrap();
     load_segment(SegmentErrorTypes::Variable, segment, var_regex)
 }
 
+///Uses the load_segment function to load code data into memory.
+/// # Arguments
+///  * - `segment` - String slice containing code data
+/// # Returns
+/// * Ok(Vec<String>) - An array containing code data for the interpreter to execute.
+/// * Err(u32) - An error code. This happens when there was an error parsing the code string.
 fn load_code_segment(segment: &str) -> Result<Vec<String>, u32> {
     let var_regex = Regex::new(r#"^(\d+) (.+)"#).unwrap();
     load_segment(SegmentErrorTypes::Code, segment, var_regex)
