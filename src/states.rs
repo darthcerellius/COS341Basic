@@ -6,6 +6,10 @@ use num_integer::div_rem;
 use rand::Rng;
 use std::{thread, time::Duration};
 
+/*
+This code exists to provide a means to test that
+input, output and exit states work as intended
+ */
 #[cfg(test)]
 static mut IO_BUFFER: String = String::new();
 #[cfg(test)]
@@ -58,11 +62,37 @@ fn write_output(out_string: String) {
     println!("{}", out_string);
 }
 
+/// This trait is used to interpret code data and to be returned by other states.
 pub trait StateMachine {
+    /// Interprets code data referenced by a state offset.
+    /// A new state and offset is returned if the execution was successful, otherwise an error message is returned.
+    /// # Arguments
+    /// * `registers` - An array of data to use for computation. Data in this array may be mutated by the function
+    /// * `code_list` - An array of COS341Basic instructions to execute
+    /// * `state` - Offset of the code_list parameter. Tells the function which statement to execute
+    ///
+    /// # Returns
+    /// * `Ok((usize, Box<dyn StateMachine>))` - A tuple containing the new state and offset. The offset may
+    ///                                          be the next instruction to execute or an offset specified by a 'goto' command
+    /// * `Err(String)` - An error message detailing why the execution failed
     fn execute(&self, registers : &mut Vec<String>, code_list : &Vec<String> , state: usize) -> Result<(usize, Box<dyn StateMachine>),String>;
 }
 
-fn fetch_and_execute<T>(
+/// Decodes a line of code using a given regex. If the decoding was successful, the passed in
+/// executor function is executed, otherwise the given error message is returned. If no code string
+/// is passed, this function returns the quit state.
+///
+/// # Arguments
+/// * `code` - code that the function needs to decode
+/// * `regular_expression` - Regex used to decode the code
+/// * `executor` - Function to execute if the decoding was successful
+/// * `error_msg` - Error to return if the decoding failed
+///
+/// # Returns
+/// * `Ok((usize, Box<dyn StateMachine>))` - A tuple containing the new state and offset. The offset may
+///                                          be the next instruction to execute or an offset specified by a 'goto' command
+/// * `Err(String)` - An error message detailing why the execution failed
+fn decode_and_execute<T>(
     code: &Option<&String>,
     regular_expression: Regex,
     mut executor: T,
@@ -92,14 +122,18 @@ pub enum States {
     MathState
 }
 
-struct EndState {}
-struct AssignState {}
-struct ExecuteState {}
-struct IfState{}
-struct GotoState{}
-struct OutputState{}
-struct MathState {}
+struct EndState {} // Tell the interpreter to quit
+struct AssignState {} // Assigns data to registers and gets user input
+struct ExecuteState {} // Starting point for code execution
+struct IfState{} // Handles conditional branching statements
+struct GotoState{} // Handles unconditional jump statements
+struct OutputState{} // Outputs data to the user
+struct MathState {} // Handle arithmetic statements
 
+/*
+Array of state types and conditions used by the execute state to
+determine which state to transition to.
+ */
 lazy_static! {
     static ref TRANSITION_FUNCTIONS: [(Regex, States); 5] = [
         (Regex::new(r"let").unwrap(), States::AssignState),
@@ -136,7 +170,7 @@ pub fn get_state(state_type: States) -> Box<dyn StateMachine> {
 impl StateMachine for ExecuteState {
     fn execute(&self, _: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
         let code = &code_list.get(state);
-        fetch_and_execute(
+        decode_and_execute(
             code,
           Regex::new("(.*)").unwrap(),
           |value, _| -> Result<(usize, Box<dyn StateMachine>),String>
@@ -163,7 +197,7 @@ impl StateMachine for EndState {
 impl StateMachine for GotoState {
     fn execute(&self, _: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
         let code = &code_list.get(state);
-        fetch_and_execute(
+        decode_and_execute(
             code,
             Regex::new(r"goto (\d+)").unwrap(),
             |_, goto_capture| -> Result<(usize, Box<dyn StateMachine>),String>
@@ -182,7 +216,7 @@ impl StateMachine for GotoState {
 impl StateMachine for IfState {
     fn execute(&self, registers: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
         let code = &code_list.get(state);
-        fetch_and_execute(
+        decode_and_execute(
             code,
             Regex::new(r"if M([0-9]+) (<=?|>=?|=|!=) M(\d+) goto (\d+)").unwrap(),
             |_, captures| {
@@ -223,7 +257,7 @@ impl StateMachine for IfState {
 impl StateMachine for OutputState {
     fn execute(&self, registers: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
         let code = &code_list.get(state);
-        fetch_and_execute(
+        decode_and_execute(
             code,
             Regex::new(r"output M(\d+)").unwrap(),
             |_, output_capture| -> Result<(usize, Box<dyn StateMachine>),String>
@@ -316,7 +350,7 @@ impl StateMachine for AssignState {
 impl StateMachine for MathState {
     fn execute(&self, registers: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>), String> {
         let code = &code_list.get(state);
-        fetch_and_execute(
+        decode_and_execute(
             code,
             Regex::new(r"M(\d+) = M(\d+) ([+\-*/]) M(\d+)").unwrap(),
             |_, captures| {
