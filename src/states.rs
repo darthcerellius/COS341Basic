@@ -6,6 +6,8 @@ use num_integer::div_rem;
 use rand::Rng;
 use std::{thread, time::Duration};
 
+type NewState = Result<(usize, Box<dyn StateMachine>),String>;
+
 /*
 This code exists to provide a means to test that
 input, output and exit states work as intended
@@ -75,7 +77,7 @@ pub trait StateMachine {
     /// * `Ok((usize, Box<dyn StateMachine>))` - A tuple containing the new state and offset. The offset may
     ///                                          be the next instruction to execute or an offset specified by a 'goto' command
     /// * `Err(String)` - An error message detailing why the execution failed
-    fn execute(&self, registers : &mut Vec<String>, code_list : &Vec<String> , state: usize) -> Result<(usize, Box<dyn StateMachine>),String>;
+    fn execute(&self, registers : &mut Vec<String>, code_list : &Vec<String> , state: usize) -> NewState;
 }
 
 /// Decodes a line of code using a given regex. If the decoding was successful, the passed in
@@ -97,8 +99,7 @@ fn decode_and_execute<T>(
     regular_expression: Regex,
     mut executor: T,
     error_msg: &str
-) -> Result<(usize, Box<dyn StateMachine>), String> where T: FnMut(&String, Captures) ->
-Result<(usize, Box<dyn StateMachine>), String> {
+) -> NewState where T: FnMut(&String, Captures) -> NewState {
     match code {
         Some(value) => {
             if regular_expression.is_match(value) {
@@ -168,12 +169,12 @@ pub fn get_state(state_type: States) -> Box<dyn StateMachine> {
 }
 
 impl StateMachine for ExecuteState {
-    fn execute(&self, _: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
+    fn execute(&self, _: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> NewState {
         let code = &code_list.get(state);
         decode_and_execute(
             code,
           Regex::new("(.*)").unwrap(),
-          |value, _| -> Result<(usize, Box<dyn StateMachine>),String>
+          |value, _| -> NewState
               {
                   //Find the correct state to move to
                   for new_state in TRANSITION_FUNCTIONS.iter() {
@@ -188,19 +189,19 @@ impl StateMachine for ExecuteState {
 }
 
 impl StateMachine for EndState {
-    fn execute(&self, _: &mut Vec<String>, _: &Vec<String>, _: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
+    fn execute(&self, _: &mut Vec<String>, _: &Vec<String>, _: usize) -> NewState {
         do_exit();
         Err(format!("Exit"))
     }
 }
 
 impl StateMachine for GotoState {
-    fn execute(&self, _: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
+    fn execute(&self, _: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> NewState {
         let code = &code_list.get(state);
         decode_and_execute(
             code,
             Regex::new(r"goto (\d+)").unwrap(),
-            |_, goto_capture| -> Result<(usize, Box<dyn StateMachine>),String>
+            |_, goto_capture| -> NewState
                 {
                     let goto_ptr = goto_capture[1].parse::<usize>().unwrap();
                     if goto_ptr >= code_list.len() {
@@ -214,7 +215,7 @@ impl StateMachine for GotoState {
 }
 
 impl StateMachine for IfState {
-    fn execute(&self, registers: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
+    fn execute(&self, registers: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> NewState {
         let code = &code_list.get(state);
         decode_and_execute(
             code,
@@ -255,12 +256,12 @@ impl StateMachine for IfState {
 }
 
 impl StateMachine for OutputState {
-    fn execute(&self, registers: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
+    fn execute(&self, registers: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> NewState {
         let code = &code_list.get(state);
         decode_and_execute(
             code,
             Regex::new(r"output M(\d+)").unwrap(),
-            |_, output_capture| -> Result<(usize, Box<dyn StateMachine>),String>
+            |_, output_capture| -> NewState
                 {
                     let mem_pos = output_capture[1].parse::<usize>().unwrap();
                     let data = registers.get(mem_pos);
@@ -275,7 +276,7 @@ impl StateMachine for OutputState {
 }
 
 impl StateMachine for AssignState {
-    fn execute(&self, registers: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>),String> {
+    fn execute(&self, registers: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> NewState {
         let code = &code_list.get(state); // get the line of code
 
         //ensure that we actually have a line of code to work with
@@ -348,7 +349,7 @@ impl StateMachine for AssignState {
 }
 
 impl StateMachine for MathState {
-    fn execute(&self, registers: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> Result<(usize, Box<dyn StateMachine>), String> {
+    fn execute(&self, registers: &mut Vec<String>, code_list: &Vec<String>, state: usize) -> NewState {
         let code = &code_list.get(state);
         decode_and_execute(
             code,
