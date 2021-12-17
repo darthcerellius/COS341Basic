@@ -1,20 +1,13 @@
-BEGIN_REGISTER_SEGMENT
-0 0
-1 5
-2 10
-3 hello
-4 world
-5 66
-END_REGISTER_SEGMENT
-
-BEGIN_CODE_SEGMENT
-0 let M0 = 5
-1 if M0 < M1 goto C3
-2 goto C6
-3 output M3
-4 output M4
-5 quit
-6 let M5 = M5 + M0
-7 output M5
-8 quit
-END_CODE_SEGMENT
+0 let $a = 5
+1 let $b = 5
+2 let $c = 5
+3 let $d = 5
+4 let $e = 5
+5 if $a < $b goto 7
+6 goto 9
+7 output $c
+8 output $d
+9 quit
+10 let $e = $e + $a
+11 output $e
+12 quit
