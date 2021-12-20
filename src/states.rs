@@ -296,7 +296,7 @@ impl StateMachine for AssignState {
                 let assign_from_code = Regex::new(r#"let \$(\w+) = (0+|([1-9]\d*)|"[a-zA-Z ]*")"#).unwrap();
                 let assign_from_memory = Regex::new(r"let \$(\w+) = \$(\w+)").unwrap();
                 let assign_from_input = Regex::new(r"let \$(\w+) = input").unwrap();
-                let assign_from_operation = Regex::new(r"let \$(\d+) = \$(\w+) ([+\-*/]) \$(\w+)").unwrap();
+                let assign_from_operation = Regex::new(r"let \$(\w+) = \$(\w+) ([+\-*/]) \$(\w+)").unwrap();
                 let assign_from_stack = Regex::new(r"let \$ = pop").unwrap();
 
                 // Check if assigning from a hardcoded value
@@ -662,99 +662,249 @@ mod test {
         assert_eq!(res.unwrap().0.get_index(), 3)
     }
 
-    // #[test]
-    // fn math_add() {
-    //     let mut register_vec = vec![String::from("1"), String::from("1"), String::from("0")];
-    //     let code_vec = vec![String::from("M2 = M0 + M1")];
-    //     let res = MathState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(register_vec.get(2).unwrap(), "2")
-    // }
-    //
-    // #[test]
-    // fn math_sub() {
-    //     let mut register_vec = vec![String::from("1"), String::from("1"), String::from("0")];
-    //     let code_vec = vec![String::from("M2 = M0 - M1")];
-    //     let res = MathState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(register_vec.get(2).unwrap(), "0")
-    // }
-    //
-    // #[test]
-    // fn math_mult() {
-    //     let mut register_vec = vec![String::from("2"), String::from("4"), String::from("0")];
-    //     let code_vec = vec![String::from("M2 = M0 * M1")];
-    //     let res = MathState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(register_vec.get(2).unwrap(), "8")
-    // }
-    //
-    // #[test]
-    // fn math_div() {
-    //     let mut register_vec = vec![String::from("5"), String::from("2"), String::from("0"), String::from("0")];
-    //     let code_vec = vec![String::from("M2 = M0 / M1")];
-    //     let res = MathState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(register_vec.get(2).unwrap(), "2");
-    //     assert_eq!(register_vec.get(3).unwrap(), "1")
-    // }
-    //
-    // #[test]
-    // fn math_div_no_space() {
-    //     let mut register_vec = vec![String::from("5"), String::from("2"), String::from("0")];
-    //     let code_vec = vec![String::from("M2 = M0 / M1")];
-    //     let res = MathState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(res.err().unwrap(), "Division statement cannot write to register not allocated!\nAborting...")
-    // }
-    //
-    // #[test]
-    // fn math_lhs_not_number() {
-    //     let mut register_vec = vec![String::from("hi"), String::from("5"), String::from("0")];
-    //     let code_vec = vec![String::from("M2 = M0 / M1")];
-    //     let res = MathState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(res.err().unwrap(), "LHS register is not a number!\nAborting...")
-    // }
-    //
-    // #[test]
-    // fn math_rhs_not_number() {
-    //     let mut register_vec = vec![String::from("5"), String::from("hi"), String::from("0")];
-    //     let code_vec = vec![String::from("M2 = M0 / M1")];
-    //     let res = MathState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(res.err().unwrap(), "RHS register is not a number!\nAborting...")
-    // }
-    // #[test]
-    // fn end_state_quits_program() {
-    //     let mut register_vec: Vec<String> = vec![];
-    //     let code_vec = vec![String::from("quit")];
-    //     let res = EndState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(res.err().unwrap(), "Exit");
-    //     unsafe {
-    //         assert_eq!(IS_EXIT, true)
-    //     }
-    // }
-    //
-    // #[test]
-    // fn assign_state_returns_math_state() {
-    //     let mut register_vec = vec![String::from("2"), String::from("4"), String::from("0")];
-    //     let code_vec = vec![String::from("let M2 = M0 * M1")];
-    //     let mut res = AssignState{}.execute(&mut register_vec, &code_vec, 0);
-    //     let state = res.as_ref().unwrap().0;
-    //     res = res.as_ref().unwrap().1.execute(&mut register_vec, &code_vec, state);
-    //     assert_eq!(register_vec.get(2).unwrap(), "8")
-    // }
-    //
-    // #[test]
-    // fn output_access_invalid_register() {
-    //     let mut register_vec = vec![String::from("0")];
-    //     let code_vec = vec![String::from("output M2")];
-    //     let res = OutputState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(res.err().unwrap(), "Memory index out of bounds!\nAborting...")
-    // }
-    //
-    // #[test]
-    // fn execute_invalid_instruction() {
-    //     let mut register_vec = vec![String::from("0")];
-    //     let code_vec = vec![String::from("go to 0")];
-    //     let res = ExecuteState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(res.err().unwrap(), "Unknown instruction: go to 0\nAborting...")
-    // }
-    //
+    #[test]
+    fn math_add() {
+        let mut data = ProgramData::new(
+            vec![
+                String::from("let $a = 1"),
+                String::from("let $b = 2"),
+                String::from("let $c = $a + $b"),
+            ],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        //Assign $a
+        let mut result = ExecuteState{}.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Assign $b
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Assign $c (should perform addition)
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+
+        assert_eq!(data.get_var(&String::from("c")).unwrap().as_str(), "3")
+    }
+
+    #[test]
+    fn math_sub() {
+        let mut data = ProgramData::new(
+            vec![
+                String::from("let $a = 1"),
+                String::from("let $b = 1"),
+                String::from("let $c = $a - $b"),
+            ],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        //Assign $a
+        let mut result = ExecuteState{}.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Assign $b
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Assign $c (should perform subtraction)
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+
+        assert_eq!(data.get_var(&String::from("c")).unwrap().as_str(), "0")
+    }
+
+    #[test]
+    fn math_mult() {
+        let mut data = ProgramData::new(
+            vec![
+                String::from("let $a = 4"),
+                String::from("let $b = 2"),
+                String::from("let $c = $a * $b"),
+            ],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        //Assign $a
+        let mut result = ExecuteState{}.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Assign $b
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Assign $c (should perform multiplication)
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+
+        assert_eq!(data.get_var(&String::from("c")).unwrap().as_str(), "8")
+    }
+
+    #[test]
+    fn math_div() {
+        let mut data = ProgramData::new(
+            vec![
+                String::from("let $a = 5"),
+                String::from("let $b = 2"),
+                String::from("let $c = $a / $b"),
+            ],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        //Assign $a
+        let mut result = ExecuteState{}.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Assign $b
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Assign $c (should perform division)
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+
+        assert_eq!(data.get_var(&String::from("c")).unwrap().as_str(), "2");
+        assert_eq!(data.pop().unwrap().as_str(), "1")
+    }
+
+    #[test]
+    fn math_lhs_not_number() {
+        let mut data = ProgramData::new(
+            vec![
+                String::from("let $a = \"me\""),
+                String::from("let $b = 2"),
+                String::from("let $c = $a / $b"),
+            ],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        //Assign $a
+        let mut result = ExecuteState{}.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Assign $b
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Assign $c (should return error)
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        let res = result.1.execute(data).err();
+        assert_eq!(res.unwrap(), "$a is not a numeric value!\nAborting...")
+    }
+
+    #[test]
+    fn math_rhs_not_number() {
+        let mut data = ProgramData::new(
+            vec![
+                String::from("let $a = 2"),
+                String::from("let $b = \"me\""),
+                String::from("let $c = $a / $b"),
+            ],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        //Assign $a
+        let mut result = ExecuteState{}.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Assign $b
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Assign $c (should return error)
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        let res = result.1.execute(data).err();
+        assert_eq!(res.unwrap(), "$b is not a numeric value!\nAborting...")
+    }
+
+    #[test]
+    fn end_state_quits_program() {
+        let mut data = ProgramData::new(
+            vec![
+                String::from("quit"),
+            ],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        //Quit program
+        let mut result = ExecuteState{}.execute(data).unwrap();
+        data = result.0;
+        let res = result.1.execute(data);
+
+        assert_eq!(res.err().unwrap(), "Exit");
+        unsafe {
+            assert_eq!(IS_EXIT, true)
+        }
+    }
+
+    #[test]
+    fn execute_invalid_instruction() {
+        let mut data = ProgramData::new(
+            vec![
+                String::from("go to 0")
+            ],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        //Run invalid instruction
+        let res = ExecuteState{}.execute(data);
+        assert_eq!(res.err().unwrap(), "Unknown instruction: go to 0\nAborting...")
+    }
+
     // #[test]
     // fn assign_from_invalid_register_lhs() {
     //     let mut register_vec = vec![String::from("0")];
