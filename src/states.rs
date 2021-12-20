@@ -297,7 +297,7 @@ impl StateMachine for AssignState {
                 let assign_from_memory = Regex::new(r"let \$(\w+) = \$(\w+)").unwrap();
                 let assign_from_input = Regex::new(r"let \$(\w+) = input").unwrap();
                 let assign_from_operation = Regex::new(r"let \$(\w+) = \$(\w+) ([+\-*/]) \$(\w+)").unwrap();
-                let assign_from_stack = Regex::new(r"let \$ = pop").unwrap();
+                let assign_from_stack = Regex::new(r"let \$(\w+) = pop").unwrap();
 
                 // Check if assigning from a hardcoded value
                 if assign_from_code.is_match(&format!("{}", value)) {
@@ -310,6 +310,20 @@ impl StateMachine for AssignState {
                     data.next_line();
                     Ok((data, get_state(States::ExecuteState)))
 
+                    //check if assigning from stack
+                } else if assign_from_stack.is_match(&format!("{}", value)) {
+                    let stack_value = data.pop();
+
+                    match stack_value {
+                        Some(stack_val) => {
+                            let assign_tokens = assign_from_stack.captures(&value).unwrap();
+                            let var_val = assign_tokens[1].to_string();
+                            data.set_var(var_val, stack_val);
+                            data.next_line();
+                            Ok((data, get_state(States::ExecuteState)))
+                        },
+                        None => Err(String::from("Stack is empty!\nAborting..."))
+                    }
                     // Check if assigning from operation
                 } else if assign_from_operation.is_match(&format!("{}", value)) {
                     Ok((data, get_state(States::MathState)))
@@ -1136,5 +1150,31 @@ mod test {
         let res = result.1.execute(data);
 
         assert_eq!(res.err().unwrap(), "Exit")
+    }
+
+    #[test]
+    fn assign_from_stack() {
+        let mut data = ProgramData::new(
+            vec![String::from("let $a = pop")],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        data.push(String::from("test"));
+        let mut result = AssignState{}.execute(data).unwrap();
+        data = result.0;
+        assert_eq!(data.get_var(&String::from("a")).unwrap(), "test")
+    }
+
+    #[test]
+    fn assign_empty_stack() {
+        let mut data = ProgramData::new(
+            vec![String::from("let $a = pop")],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        let mut result = AssignState{}.execute(data);
+        assert_eq!(result.err().unwrap(), "Stack is empty!\nAborting...")
     }
 }
