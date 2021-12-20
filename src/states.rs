@@ -293,7 +293,7 @@ impl StateMachine for AssignState {
             Some(value) => {
 
                 //Regex used to process the assign statement
-                let assign_from_code = Regex::new(r#"let \$(\w+) = (([1-9]\d*)|"[a-zA-Z ]*")"#).unwrap();
+                let assign_from_code = Regex::new(r#"let \$(\w+) = (0+|([1-9]\d*)|"[a-zA-Z ]*")"#).unwrap();
                 let assign_from_memory = Regex::new(r"let \$(\w+) = \$(\w+)").unwrap();
                 let assign_from_input = Regex::new(r"let \$(\w+) = input").unwrap();
                 let assign_from_operation = Regex::new(r"let \$(\d+) = \$(\w+) ([+\-*/]) \$(\w+)").unwrap();
@@ -594,30 +594,74 @@ mod test {
         assert_eq!(res.unwrap().0.get_index(), 2)
     }
 
-    // #[test]
-    // fn goto_invalid_block() {
-    //     let mut register_vec: Vec<String> = Vec::new();
-    //     let code_vec = vec![String::from("goto 4"), String::from("quit"), String::from("quit")];
-    //     let res = GotoState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(res.err().unwrap(), "Goto statement points to region out of bounds!\nAborting...")
-    // }
-    //
-    // #[test]
-    // fn if_tests_true() {
-    //     let mut register_vec = vec![String::from("0"), String::from("1")];
-    //     let code_vec = vec![String::from("if M0 < M1 goto 2"), String::from("quit"), String::from("quit")];
-    //     let res = IfState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(res.unwrap().0, 2)
-    // }
-    //
-    // #[test]
-    // fn if_tests_false() {
-    //     let mut register_vec = vec![String::from("0"), String::from("1")];
-    //     let code_vec = vec![String::from("if M0 > M1 goto 2"), String::from("quit"), String::from("quit")];
-    //     let res = IfState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(res.unwrap().0, 1)
-    // }
-    //
+    #[test]
+    fn goto_invalid_block() {
+        let mut data = ProgramData::new(
+            vec![String::from("goto 4"), String::from("quit"), String::from("quit")],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        let res = GotoState{}.execute(data);
+        assert_eq!(res.err().unwrap(), "Goto statement points to region out of bounds!\nAborting...")
+    }
+
+    #[test]
+    fn if_tests_true() {
+        let mut data = ProgramData::new(
+            vec![
+                String::from("let $a = 0"),
+                String::from("let $b = 1"),
+                String::from("if $a < $b goto 2"),
+                String::from("quit"), String::from("quit"),
+            ],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        //Assign $a
+        let mut result = ExecuteState{}.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Assign $b
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        let res = IfState{}.execute(result.0);
+        assert_eq!(res.unwrap().0.get_index(), 2)
+    }
+
+    #[test]
+    fn if_tests_false() {
+        let mut data = ProgramData::new(
+            vec![
+                String::from("let $a = 1"),
+                String::from("let $b = 0"),
+                String::from("if $a < $b goto 2"),
+                String::from("quit"), String::from("quit"),
+            ],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        //Assign $a
+        let mut result = ExecuteState{}.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Assign $b
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        let res = IfState{}.execute(result.0);
+        assert_eq!(res.unwrap().0.get_index(), 3)
+    }
+
     // #[test]
     // fn math_add() {
     //     let mut register_vec = vec![String::from("1"), String::from("1"), String::from("0")];
