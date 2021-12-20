@@ -905,115 +905,236 @@ mod test {
         assert_eq!(res.err().unwrap(), "Unknown instruction: go to 0\nAborting...")
     }
 
-    // #[test]
-    // fn assign_from_invalid_register_lhs() {
-    //     let mut register_vec = vec![String::from("0")];
-    //     let code_vec = vec![String::from("let M0 = M1")];
-    //     let res = AssignState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(res.err().unwrap(), "Accessing register that is not allocated: 1\nAborting")
-    // }
-    //
-    // #[test]
-    // fn assign_from_invalid_register_rhs() {
-    //     let mut register_vec = vec![String::from("0")];
-    //     let code_vec = vec![String::from("let M1 = M0")];
-    //     let res = AssignState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(res.err().unwrap(), "Accessing register that is not allocated: 1\nAborting")
-    // }
-    //
-    // #[test]
-    // fn goto_invalid_goto() {
-    //     let mut register_vec = vec![String::from("0")];
-    //     let code_vec = vec![String::from("goto e")];
-    //     let res = GotoState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(res.err().unwrap(), "Invalid goto statement: goto e\nAborting...")
-    // }
-    //
-    // #[test]
-    // fn assign_invalid_assign_rhs() {
-    //     let mut register_vec = vec![String::from("0")];
-    //     let code_vec = vec![String::from("let M0 = e")];
-    //     let res = AssignState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(res.err().unwrap(), "Invalid assign instruction: let M0 = e\nAborting...")
-    // }
-    //
-    // #[test]
-    // fn assign_invalid_assign_lhs() {
-    //     let mut register_vec = vec![String::from("0")];
-    //     let code_vec = vec![String::from("let e = M0")];
-    //     let res = AssignState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(res.err().unwrap(), "Invalid assign instruction: let e = M0\nAborting...")
-    // }
-    //
-    // #[test]
-    // fn if_invalid_lhs_reg_index() {
-    //     let mut register_vec = vec![String::from("0")];
-    //     let code_vec = vec![String::from("if M1 != M0 goto 0")];
-    //     let res = IfState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(res.err().unwrap(), "Memory index out of bounds!\nAborting")
-    // }
-    //
-    // #[test]
-    // fn if_invalid_rhs_reg_index() {
-    //     let mut register_vec = vec![String::from("0")];
-    //     let code_vec = vec![String::from("if M0 != M1 goto 0")];
-    //     let res = IfState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(res.err().unwrap(), "Memory index out of bounds!\nAborting")
-    // }
-    //
-    // #[test]
-    // fn if_invalid_lhs_code() {
-    //     let mut register_vec = vec![String::from("0")];
-    //     let code_vec = vec![String::from("if e != M0 goto 0")];
-    //     let res = IfState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(res.err().unwrap(), "Invalid if statement: if e != M0 goto 0\nAborting...")
-    // }
-    //
-    // #[test]
-    // fn if_invalid_rhs_code() {
-    //     let mut register_vec = vec![String::from("0")];
-    //     let code_vec = vec![String::from("if M0 != e goto 0")];
-    //     let res = IfState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(res.err().unwrap(), "Invalid if statement: if M0 != e goto 0\nAborting...")
-    // }
-    // #[test]
-    // fn if_test_predicates() {
-    //     let mut register_vec = vec![String::from("0"), String::from("1")];
-    //     let code_vec = vec![
-    //         String::from("if M0 != M1 goto 5"),
-    //         String::from("if M0 < M1 goto 5"),
-    //         String::from("if M0 <= M1 goto 5"),
-    //         String::from("if M0 > M1 goto 5"),
-    //         String::from("if M0 >= M1 goto 5"),
-    //         String::from("if M0 = M1 goto 5"),
-    //     ];
-    //     let mut res = IfState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(res.unwrap().0, 5);
-    //     res = IfState{}.execute(&mut register_vec, &code_vec, 1);
-    //     assert_eq!(res.unwrap().0, 5);
-    //     res = IfState{}.execute(&mut register_vec, &code_vec, 2);
-    //     assert_eq!(res.unwrap().0, 5);
-    //     res = IfState{}.execute(&mut register_vec, &code_vec, 3);
-    //     assert_eq!(res.unwrap().0, 4);
-    //     res = IfState{}.execute(&mut register_vec, &code_vec, 4);
-    //     assert_eq!(res.unwrap().0, 5);
-    //     res = IfState{}.execute(&mut register_vec, &code_vec, 5);
-    //     assert_eq!(res.unwrap().0, 6);
-    // }
-    //
-    // #[test]
-    // fn assign_code_invalid_register() {
-    //     let mut register_vec = vec![String::from("0")];
-    //     let code_vec = vec![String::from("let M1 = 5")];
-    //     let res = AssignState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(res.err().unwrap(), "Accessing register that is not allocated: 1\nAborting")
-    // }
-    // #[test]
-    // fn assign_reach_end_of_code() {
-    //     let mut register_vec = vec![String::from("0")];
-    //     let code_vec = vec![String::from("let M1 = 5")];
-    //     let mut res = AssignState{}.execute(&mut register_vec, &code_vec, 1);
-    //     res = res.unwrap().1.execute(&mut register_vec,&code_vec, 1);
-    //     assert_eq!(res.err().unwrap(), "Exit")
-    // }
+    #[test]
+    fn assign_from_invalid_variable() {
+        let mut data = ProgramData::new(
+            vec![
+                String::from("let $a = $b"),
+            ],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        //Try assign $a
+        let mut result = ExecuteState{}.execute(data).unwrap();
+        data = result.0;
+        let res = result.1.execute(data);
+
+        assert_eq!(res.err().unwrap(), "Variable $b does not exist!\nAborting...")
+    }
+
+    #[test]
+    fn goto_invalid_goto() {
+        let mut data = ProgramData::new(
+            vec![
+                String::from("goto e"),
+            ],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        //Try assign $a
+        let mut result = ExecuteState{}.execute(data).unwrap();
+        data = result.0;
+        let res = result.1.execute(data);
+
+        assert_eq!(res.err().unwrap(), "Invalid goto statement: goto e\nAborting...")
+    }
+
+    #[test]
+    fn assign_invalid_assign_rhs() {
+        let mut data = ProgramData::new(
+            vec![
+                String::from("let $a = e"),
+            ],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        //Try assign $a
+        let mut result = ExecuteState{}.execute(data).unwrap();
+        data = result.0;
+        let res = result.1.execute(data);
+
+        assert_eq!(res.err().unwrap(), "Invalid assign instruction: let $a = e\nAborting...")
+    }
+
+    #[test]
+    fn assign_invalid_assign_lhs() {
+        let mut data = ProgramData::new(
+            vec![
+                String::from("let e = $a"),
+            ],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        //Try assign $a
+        let mut result = ExecuteState{}.execute(data).unwrap();
+        data = result.0;
+        let res = result.1.execute(data);
+
+        assert_eq!(res.err().unwrap(), "Invalid assign instruction: let e = $a\nAborting...")
+    }
+
+    #[test]
+    fn if_invalid_lhs_variable() {
+        let mut data = ProgramData::new(
+            vec![
+                String::from("let $a = 0"),
+                String::from("if $a < $b goto 3"),
+                String::from("quit"), String::from("quit"),
+            ],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        //Assign $a
+        let mut result = ExecuteState{}.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        let res = IfState{}.execute(result.0);
+        assert_eq!(res.err().unwrap(), "Variable $b does not exist!\nAborting...")
+    }
+
+    #[test]
+    fn if_invalid_rhs_variable() {
+        let mut data = ProgramData::new(
+            vec![
+                String::from("let $b = 0"),
+                String::from("if $a < $b goto 3"),
+                String::from("quit"), String::from("quit"),
+            ],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        //Assign $a
+        let mut result = ExecuteState{}.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        let res = IfState{}.execute(result.0);
+        assert_eq!(res.err().unwrap(), "Variable $a does not exist!\nAborting...")
+    }
+
+    #[test]
+    fn if_invalid_lhs_code() {
+        let mut data = ProgramData::new(
+            vec![
+                String::from("let $b = 0"),
+                String::from("if e < $b goto 3"),
+                String::from("quit"), String::from("quit"),
+            ],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        //Assign $a
+        let mut result = ExecuteState{}.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        let res = IfState{}.execute(result.0);
+        assert_eq!(res.err().unwrap(), "Invalid if statement: if e < $b goto 3\nAborting...")
+    }
+
+    #[test]
+    fn if_invalid_rhs_code() {
+        let mut data = ProgramData::new(
+            vec![
+                String::from("let $a = 0"),
+                String::from("if $a < e goto 3"),
+                String::from("quit"), String::from("quit"),
+            ],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        //Assign $a
+        let mut result = ExecuteState{}.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        let res = IfState{}.execute(result.0);
+        assert_eq!(res.err().unwrap(), "Invalid if statement: if $a < e goto 3\nAborting...")
+    }
+
+    #[test]
+    fn if_test_predicates() {
+        let mut data = ProgramData::new(
+            vec![
+                String::from("let $a = 0"),
+                String::from("let $b = 1"),
+                String::from("if $a != $b goto 5"),
+                String::from("if $a < $b goto 5"),
+                String::from("if $a <= $b goto 5"),
+                String::from("if $a > $b goto 5"),
+                String::from("if $a >= $b goto 5"),
+                String::from("if $a = $b goto 5"),
+            ],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+
+        //Assign $a
+        let mut result = ExecuteState{}.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Assign $b
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+
+        let mut res = IfState{}.execute(data).unwrap();
+        data = res.0;
+        assert_eq!(data.get_index(), 5);
+
+        data.set_index(3);
+        res = IfState{}.execute(data).unwrap();
+        data = res.0;
+        assert_eq!(data.get_index(), 5);
+
+        data.set_index(3);
+        res = IfState{}.execute(data).unwrap();
+        data = res.0;
+        assert_eq!(data.get_index(), 5);
+
+        data.set_index(4);
+        res = IfState{}.execute(data).unwrap();
+        data = res.0;
+        assert_eq!(data.get_index(), 5);
+
+        data.set_index(5);
+        res = IfState{}.execute(data).unwrap();
+        data = res.0;
+        assert_eq!(data.get_index(), 6);
+
+        data.set_index(6);
+        res = IfState{}.execute(data).unwrap();
+        assert_eq!(res.0.get_index(), 7);
+    }
+
+    #[test]
+    fn assign_reach_end_of_code() {
+        let mut data = ProgramData::new(
+            vec![String::from("let $a = 5")],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        let mut result = AssignState{}.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        data = result.0;
+        let res = result.1.execute(data);
+
+        assert_eq!(res.err().unwrap(), "Exit")
+    }
 }
