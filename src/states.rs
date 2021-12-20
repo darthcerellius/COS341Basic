@@ -437,91 +437,163 @@ mod test {
         assert_eq!(*(result.0.get_var(&String::from("a")).unwrap()), String::from("5"))
     }
 
-    // #[test]
-    // fn assign_number_to_register() {
-    //     let mut memory_vec = vec![String::from("0")];
-    //     let code_vec = vec![String::from("let M0 = 5")];
-    //     AssignState{}.execute(&mut memory_vec, &code_vec, 0);
-    //     assert_eq!(memory_vec.get(0).unwrap(), "5")
-    // }
-    //
-    // #[test]
-    // fn assign_string_to_register() {
-    //     let mut memory_vec = vec![String::from(r#""""#)];
-    //     let code_vec = vec![String::from(r#"let M0 = "hello""#)];
-    //     AssignState{}.execute(&mut memory_vec, &code_vec, 0);
-    //     assert_eq!(memory_vec.get(0).unwrap(), r#"hello"#)
-    // }
-    //
-    // #[test]
-    // fn assign_from_register_to_register() {
-    //     let mut memory_vec = vec![String::from("0"), String::from("5")];
-    //     let code_vec = vec![String::from("let M0 = M1")];
-    //     AssignState{}.execute(&mut memory_vec, &code_vec, 0);
-    //     assert_eq!(memory_vec.get(0).unwrap(), "5")
-    // }
-    //
-    // #[test]
-    // fn assign_register_to_input() {
-    //     unsafe {
-    //         IO_BUFFER = String::from("hello")
-    //     }
-    //     let mut register_vec = vec![String::from("0")];
-    //     let code_vec = vec![String::from("let M0 = input")];
-    //     AssignState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(register_vec.get(0).unwrap(), "hello")
-    // }
-    //
-    // #[test]
-    // fn output_int_register() {
-    //
-    //     //Save the static global variable to ensure other test data is saved
-    //     let mut old_str = String::new();
-    //     unsafe {
-    //         old_str = IO_BUFFER.clone();
-    //     }
-    //     let mut register_vec = vec![String::from("5")];
-    //     let code_vec = vec![String::from("output M0")];
-    //     OutputState{}.execute(&mut register_vec, &code_vec, 0);
-    //     let mut output_str = String::new();
-    //     unsafe {
-    //         output_str = IO_BUFFER.clone();
-    //         IO_BUFFER = old_str;
-    //     }
-    //     assert_eq!("5", output_str);
-    // }
-    //
-    // #[test]
-    // fn output_str_register() {
-    //
-    //     //Hack to stop static global variable for being accessed by multiple tests simultaneously
-    //     let sleep_time = rand::thread_rng().gen_range(100..500);
-    //     thread::sleep(Duration::from_millis(sleep_time));
-    //
-    //     //Save the static global variable to ensure other test data is saved
-    //     let mut old_str = String::new();
-    //     unsafe {
-    //         old_str = IO_BUFFER.clone();
-    //     }
-    //     let mut register_vec = vec![String::from("meme")];
-    //     let code_vec = vec![String::from("output M0")];
-    //     OutputState{}.execute(&mut register_vec, &code_vec, 0);
-    //     let mut output_str = String::new();
-    //     unsafe {
-    //         output_str = IO_BUFFER.clone();
-    //         IO_BUFFER = old_str;
-    //     }
-    //     assert_eq!("meme", output_str);
-    // }
-    //
-    // #[test]
-    // fn goto_valid_block() {
-    //     let mut register_vec: Vec<String> = Vec::new();
-    //     let code_vec = vec![String::from("goto 2"), String::from("quit"), String::from("quit")];
-    //     let res = GotoState{}.execute(&mut register_vec, &code_vec, 0);
-    //     assert_eq!(res.unwrap().0, 2)
-    // }
-    //
+    #[test]
+    fn assign_number_to_variable() {
+        let mut data = ProgramData::new(
+            vec![String::from("let $a = 5")],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        let result = AssignState{}.execute(data);
+        let res = result.ok().unwrap()
+            .0.get_var(&String::from("a"))
+            .unwrap().to_string();
+        assert_eq!(res.as_str(), "5")
+    }
+
+    #[test]
+    fn assign_string_to_variable() {
+        let mut data = ProgramData::new(
+            vec![String::from(r#"let $a = "hello""#)],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        let result = AssignState{}.execute(data);
+        let res = result.ok().unwrap()
+            .0.get_var(&String::from("a"))
+            .unwrap().to_string();
+        assert_eq!(res.as_str(), "hello")
+    }
+
+    #[test]
+    fn assign_from_variable_to_variable() {
+        let mut data = ProgramData::new(
+            vec![String::from("let $b = 5"), String::from("let $a = $b")],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        //Assign $b
+        let mut result = AssignState{}.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Assign the value of $b to $a
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        let res = result.0.get_var(&String::from("a"))
+            .unwrap().to_string();
+        assert_eq!(res.as_str(), "5")
+    }
+
+    #[test]
+    fn assign_register_to_input() {
+        unsafe {
+            IO_BUFFER = String::from("hello")
+        }
+        let mut data = ProgramData::new(
+            vec![String::from(r#"let $a = input"#)],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        let result = AssignState{}.execute(data);
+        let res = result.ok().unwrap()
+            .0.get_var(&String::from("a"))
+            .unwrap().to_string();
+        assert_eq!(res.as_str(), "hello")
+    }
+
+    #[test]
+    fn output_int_register() {
+
+        //Save the static global variable to ensure other test data is saved
+        let mut old_str = String::new();
+        unsafe {
+            old_str = IO_BUFFER.clone();
+        }
+        let mut data = ProgramData::new(
+            vec![String::from("let $a = 5"), String::from("output $a")],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        //Assign $a
+        let mut result = ExecuteState{}.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Execute next instruction
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Output $a
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        let mut output_str = String::new();
+        unsafe {
+            output_str = IO_BUFFER.clone();
+            IO_BUFFER = old_str;
+        }
+        assert_eq!("5", output_str);
+    }
+
+    #[test]
+    fn output_str_variable() {
+
+        //Hack to stop static global variable for being accessed by multiple tests simultaneously
+        let sleep_time = rand::thread_rng().gen_range(100..500);
+        thread::sleep(Duration::from_millis(sleep_time));
+
+        let mut data = ProgramData::new(
+            vec![String::from("let $a = \"meme\""), String::from("output $a")],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+
+        //Save the static global variable to ensure other test data is saved
+        let mut old_str = String::new();
+        unsafe {
+            old_str = IO_BUFFER.clone();
+        }
+        //Assign $a
+        let mut result = ExecuteState{}.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Execute next instruction
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Output $a
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        let mut output_str = String::new();
+        unsafe {
+            output_str = IO_BUFFER.clone();
+            IO_BUFFER = old_str;
+        }
+        println!("{}", output_str);
+        assert_eq!("meme", output_str);
+    }
+
+    #[test]
+    fn goto_valid_block() {
+        let mut data = ProgramData::new(
+            vec![String::from("goto 2"), String::from("quit"), String::from("quit")],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+        let res = GotoState{}.execute(data);
+        assert_eq!(res.unwrap().0.get_index(), 2)
+    }
+
     // #[test]
     // fn goto_invalid_block() {
     //     let mut register_vec: Vec<String> = Vec::new();
