@@ -97,7 +97,7 @@ pub trait StateMachine {
 /// * `Err(String)` - An error message detailing why the execution failed
 fn decode_and_execute<T>(
     data: ProgramData,
-    regular_expression: Regex,
+    regular_expression: &Regex,
     mut executor: T,
     error_msg: &str
 ) -> NewState where T: FnMut(ProgramData, &String, Captures) -> NewState {
@@ -150,6 +150,31 @@ lazy_static! {
     ];
 }
 
+/*
+Build regexes ahead of time to improve performance
+ */
+lazy_static! {
+    static ref ASSIGN_REGEXES : [Regex; 5] = [
+        Regex::new(r#"let \$(\w+) = (0+|([1-9]\d*)|"[a-zA-Z ]*")"#).unwrap(),
+        Regex::new(r"let \$(\w+) = \$(\w+)").unwrap(),
+        Regex::new(r"let \$(\w+) = input").unwrap(),
+        Regex::new(r"let \$(\w+) = \$(\w+) ([+\-*/]) \$(\w+)").unwrap(),
+        Regex::new(r"let \$(\w+) = pop").unwrap(),
+    ];
+
+    static ref IF_REGEX : Regex = Regex::new(r"if \$(\w+) (<=?|>=?|=|!=) \$(\w+) goto (\d+)").unwrap();
+
+    static ref EXECUTE_REGEX : Regex = Regex::new("(.*)").unwrap();
+
+    static ref PUSH_REGEX : Regex = Regex::new(r"push \$(\w+)").unwrap();
+
+    static ref GOTO_REGEX : Regex = Regex::new(r"goto (\d+)").unwrap();
+
+    static ref OUTPUT_REGEX : Regex = Regex::new(r"output \$(\w+)").unwrap();
+
+    static ref MATH_REGEX : Regex = Regex::new(r"\$(\w+) = \$(\w+) ([+\-*/]) \$(\w+)").unwrap();
+}
+
 /// Returns the desired state based on the provided state type
 /// # Arguments
 /// * state_type - Determine the type of state to return
@@ -179,7 +204,7 @@ impl StateMachine for ExecuteState {
         let code = data.get_code();
         decode_and_execute(
             data,
-          Regex::new("(.*)").unwrap(),
+          &EXECUTE_REGEX,
           |data, value, _| -> NewState
               {
                   //Find the correct state to move to
@@ -205,7 +230,7 @@ impl StateMachine for PushState {
     fn execute(&self, data: ProgramData) -> NewState {
         decode_and_execute(
             data,
-            Regex::new(r"push \$(\w+)").unwrap(),
+            &PUSH_REGEX,
             |mut data, _, capture| -> NewState
                 {
                     let var_name = capture[1].to_string();
@@ -228,7 +253,7 @@ impl StateMachine for GotoState {
     fn execute(&self, data: ProgramData) -> NewState {
         decode_and_execute(
             data,
-            Regex::new(r"goto (\d+)").unwrap(),
+            &GOTO_REGEX,
             |mut data, _, goto_capture| -> NewState
                 {
                     let goto_ptr = goto_capture[1].parse::<usize>().unwrap();
@@ -247,7 +272,7 @@ impl StateMachine for IfState {
     fn execute(&self, data: ProgramData) -> NewState {
         decode_and_execute(
             data,
-            Regex::new(r"if \$(\w+) (<=?|>=?|=|!=) \$(\w+) goto (\d+)").unwrap(),
+            &IF_REGEX,
             |mut data, _, captures| {
                 let lhs_name = captures[1].to_string();
                 let rhs_name = captures[3].to_string();
@@ -292,7 +317,7 @@ impl StateMachine for OutputState {
     fn execute(&self, data: ProgramData) -> NewState {
         decode_and_execute(
             data,
-            Regex::new(r"output \$(\w+)").unwrap(),
+            &OUTPUT_REGEX,
             |mut data, _, output_capture| -> NewState
                 {
                     let var_name = output_capture[1].to_string();
@@ -319,11 +344,11 @@ impl StateMachine for AssignState {
             Some(value) => {
 
                 //Regex used to process the assign statement
-                let assign_from_code = Regex::new(r#"let \$(\w+) = (0+|([1-9]\d*)|"[a-zA-Z ]*")"#).unwrap();
-                let assign_from_memory = Regex::new(r"let \$(\w+) = \$(\w+)").unwrap();
-                let assign_from_input = Regex::new(r"let \$(\w+) = input").unwrap();
-                let assign_from_operation = Regex::new(r"let \$(\w+) = \$(\w+) ([+\-*/]) \$(\w+)").unwrap();
-                let assign_from_stack = Regex::new(r"let \$(\w+) = pop").unwrap();
+                let assign_from_code = &ASSIGN_REGEXES[0];
+                let assign_from_memory = &ASSIGN_REGEXES[1];
+                let assign_from_input = &ASSIGN_REGEXES[2];
+                let assign_from_operation = &ASSIGN_REGEXES[3];
+                let assign_from_stack = &ASSIGN_REGEXES[4];
 
                 // Check if assigning from a hardcoded value
                 if assign_from_code.is_match(&format!("{}", value)) {
@@ -390,7 +415,7 @@ impl StateMachine for MathState {
     fn execute(&self, data: ProgramData) -> NewState {
         decode_and_execute(
             data,
-            Regex::new(r"\$(\w+) = \$(\w+) ([+\-*/]) \$(\w+)").unwrap(),
+            &MATH_REGEX,
             |mut data, _, captures| {
                 let lhs_name = captures[2].to_string();
                 let rhs_name = captures[4].to_string();
