@@ -122,7 +122,8 @@ pub enum States {
     IfState,
     QuitState,
     OutputState,
-    MathState
+    MathState,
+    PushState,
 }
 
 struct EndState {} // Tell the interpreter to quit
@@ -139,12 +140,13 @@ Array of state types and conditions used by the execute state to
 determine which state to transition to.
  */
 lazy_static! {
-    static ref TRANSITION_FUNCTIONS: [(Regex, States); 5] = [
+    static ref TRANSITION_FUNCTIONS: [(Regex, States); 6] = [
         (Regex::new(r"let").unwrap(), States::AssignState),
         (Regex::new(r"if").unwrap(), States::IfState), //must go before 'goto'
         (Regex::new(r"goto").unwrap(), States::GotoState),
         (Regex::new(r"quit").unwrap(), States::QuitState),
-        (Regex::new(r"output").unwrap(), States::OutputState)
+        (Regex::new(r"output").unwrap(), States::OutputState),
+        (Regex::new(r"push").unwrap(), States::PushState),
     ];
 }
 
@@ -168,6 +170,7 @@ pub fn get_state(state_type: States) -> Box<dyn StateMachine> {
         States::OutputState => Box::new(OutputState{}),
         States::ExecuteState => Box::new(ExecuteState{}),
         States::MathState => Box::new(MathState{}),
+        States::PushState => Box::new(PushState{}),
     }
 }
 
@@ -195,6 +198,29 @@ impl StateMachine for EndState {
     fn execute(&self, _: ProgramData) -> NewState {
         do_exit();
         Err(format!("Exit"))
+    }
+}
+
+impl StateMachine for PushState {
+    fn execute(&self, data: ProgramData) -> NewState {
+        decode_and_execute(
+            data,
+            Regex::new(r"push \$(\w+)").unwrap(),
+            |mut data, _, capture| -> NewState
+                {
+                    let var_name = capture[1].to_string();
+                    let var_data = data.get_var(&var_name);
+                    match var_data {
+                        Some(val) => {
+                            data.push(val.clone());
+                            data.next_line();
+                            Ok((data, get_state(States::ExecuteState)))
+                        },
+                        None => Err(format!("No such variable: ${}\nAborting...", var_name))
+                    }
+                },
+            "Invalid push statement"
+        )
     }
 }
 
@@ -425,7 +451,7 @@ mod test {
     use rand::Rng;
     use crate::{get_state, States};
     use crate::prog_data::ProgramData;
-    use crate::states::{EndState, GotoState, IO_BUFFER, IS_EXIT, MathState};
+    use crate::states::{EndState, GotoState, IO_BUFFER, IS_EXIT, MathState, PushState};
     use super::{AssignState, StateMachine, ExecuteState, OutputState, IfState};
 
     #[test]
@@ -1176,5 +1202,135 @@ mod test {
         );
         let mut result = AssignState{}.execute(data);
         assert_eq!(result.err().unwrap(), "Stack is empty!\nAborting...")
+    }
+
+    #[test]
+    fn push_to_stack() {
+        let mut data = ProgramData::new(
+            vec![String::from("let $a = 5"), String::from("push $a")],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+
+        //Assign $a
+        let mut result = ExecuteState{}.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Push to stack
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+
+        assert_eq!(data.pop().unwrap(), "5")
+    }
+
+    #[test]
+    fn add_many_items_to_stack() {
+        let mut data = ProgramData::new(
+            vec![String::from("let $a = 5"),
+                 String::from("let $b = 4"),
+                 String::from("let $c = 3"),
+                 String::from("let $d = 2"),
+                 String::from("push $a"),
+                 String::from("push $b"),
+                 String::from("push $c"),
+                 String::from("push $d"),
+            ],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+
+        //Assign $a
+        let mut result = ExecuteState{}.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Assign $b
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Assign $c
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Assign $d
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Push $a to stack
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Push $b to stack
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+
+        //Push $c to stack
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+
+        //Push $d to stack
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+        result = result.1.execute(data).unwrap();
+        data = result.0;
+
+        assert_eq!(data.pop().unwrap(), "2");
+        assert_eq!(data.pop().unwrap(), "3");
+        assert_eq!(data.pop().unwrap(), "4");
+        assert_eq!(data.pop().unwrap(), "5")
+    }
+
+    #[test]
+    fn test_invalid_code_push() {
+        let mut data = ProgramData::new(
+            vec![String::from("let $a = 5"),
+                 String::from("push a"),
+            ],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+
+        //Assign $a
+        let mut result = AssignState{}.execute(data).unwrap();
+        data = result.0;
+        let res = PushState{}.execute(data);
+
+        assert_eq!(res.err().unwrap(), "Invalid push statement: push a\nAborting...")
+    }
+
+    #[test]
+    fn test_invalid_variable_push() {
+        let mut data = ProgramData::new(
+            vec![
+                 String::from("push $a"),
+            ],
+            HashMap::new(),
+            LinkedList::new(),
+            0
+        );
+
+        let res = PushState{}.execute(data);
+
+        assert_eq!(res.err().unwrap(), "No such variable: $a\nAborting...")
     }
 }
