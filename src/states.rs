@@ -203,7 +203,7 @@ impl StateMachine for ExecuteState {
     fn execute(&self, data: ProgramData) -> NewState {
         let code = data.get_code();
         decode_and_execute(
-            data,
+          data,
           &EXECUTE_REGEX,
           |data, value, _| -> NewState
               {
