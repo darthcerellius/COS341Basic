@@ -3,8 +3,11 @@ extern crate lazy_static;
 mod code_loader;
 mod errors;
 mod states;
+mod prog_data;
 
+use std::collections::{HashMap, LinkedList};
 use std::process::exit;
+use crate::prog_data::ProgramData;
 use crate::states::{States, get_state};
 
 fn main() {
@@ -13,16 +16,25 @@ fn main() {
         Some(data) => {
             let program = code_loader::load_code_from_file(data);
             match program {
-                Ok((mut reg_data, code_data)) => {
-                    let mut state = get_state(States::ExecuteState).execute(&mut reg_data, &code_data, 0);
+                Ok(code_data) => {
+
+                    let mut prog_data = ProgramData::new(
+                        code_data,
+                        HashMap::new(),
+                        LinkedList::new(),
+                        0
+                    );
+
+                    let mut state = get_state(States::ExecuteState).execute(prog_data);
                     loop {
                         if state.as_ref().is_err() {
                             eprintln!("{}", state.err().unwrap());
                             exit(-1);
                         }
-                        let state_function = &state.as_ref().ok().unwrap().1;
-                        let new_state = state.as_ref().ok().unwrap().0;
-                        state = state_function.execute(&mut reg_data, &code_data, new_state);
+                        let result = state.ok().unwrap();
+                        let state_function = result.1;
+                        prog_data = result.0;
+                        state = state_function.execute(prog_data);
                     }
                 },
                 Err(error_msg) => {

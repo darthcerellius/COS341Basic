@@ -1,0 +1,20 @@
+BEGIN_REGISTER_SEGMENT
+0 0
+1 0
+2 0
+3 0
+END_REGISTER_SEGMENT
+BEGIN_CODE_SEGMENT
+0 let M0 = input
+1 let M1 = input
+2 let M2 = M0 + M1
+3 output M2
+4 let M2 = M0 - M1
+5 output M2
+6 let M2 = M0 * M1
+7 output M2
+8 let M2 = M0 / M1
+9 output M2
+10 output M3
+11 quit
+END_CODE_SEGMENT

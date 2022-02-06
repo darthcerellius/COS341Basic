@@ -11,8 +11,8 @@ pub mod segment_errors {
             "Code lines are not in chronological order!",
             "Malformed register segment found!",
             "Malformed code segment found!",
-    ];
-}
+        ];
+    }
 
     pub enum ErrorTypes {
         NoSegment,
