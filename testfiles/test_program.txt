@@ -1,0 +1,26 @@
+0 let $fizz = "fizz"
+1 let $buzz = "buzz"
+2 let $max = 50
+3 let $zero = 0
+4 let $one = 1
+5 let $fizz_div = 3
+6 let $buzz_div = 5
+7 let $counter = 1
+8 let $is_printed = 0
+9 let $div = $counter / $fizz_div
+10 let $rem = pop
+11 if $rem != $zero goto 14
+12 output $fizz
+13 let $is_printed = 1
+14 let $div = $counter / $buzz_div
+15 let $rem = pop
+16 if $rem != $zero goto 19
+17 output $buzz
+18 goto 21
+19 if $is_printed = $one goto 21
+20 output $counter
+21 let $is_printed = 0
+22 if $counter = $max goto 25
+23 let $counter = $counter + $one
+24 goto 8
+25 quit

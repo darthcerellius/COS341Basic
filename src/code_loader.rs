@@ -12,53 +12,12 @@ use crate::errors::segment_errors::{error, ERROR_MESSAGES, ErrorTypes, SegmentEr
 /// # Returns
 /// * `Ok((Vec<String>, Vec<String>))` - a tuple containing the register and code vectors
 /// * `Err(String)` - a message detailing any error that occurred while loading the program
-pub fn load_code_from_file(file_path: String) -> Result<(Vec<String>, Vec<String>), String>{
+pub fn load_code_from_file(file_path: String) -> Result<Vec<String>, String>{
     let file_data = fs::read_to_string(file_path.clone());
     match file_data {
         Ok(file_string) => {
-            const BEGIN_REGISTER_SEGMENT: &str = "BEGIN_REGISTER_SEGMENT\n";
-            const END_REGISTER_SEGMENT: &str = "\nEND_REGISTER_SEGMENT";
-            const BEGIN_CODE_SEGMENT: &str = "BEGIN_CODE_SEGMENT\n";
-            const END_CODE_SEGMENT: &str = "\nEND_CODE_SEGMENT";
-
-            let reg_start_pos = file_string.find(BEGIN_REGISTER_SEGMENT);
-            let reg_end_pos = file_string.find(END_REGISTER_SEGMENT);
-            let code_start_pos = file_string.find(BEGIN_CODE_SEGMENT);
-            let code_end_pos = file_string.find(END_CODE_SEGMENT);
-
-            //Ensure that the code and register segments are present
-            if reg_start_pos.is_none() {
-                return Err("No register segment found! Aborting...".to_string());
-            }
-            if reg_end_pos.is_none() {
-                return Err("Register segment not fully defined! Aborting...".to_string());
-            }
-            if code_start_pos.is_none() {
-                return Err("No code segment found! Aborting...".to_string());
-            }
-            if code_end_pos.is_none() {
-                return Err("Code segment not fully defined! Aborting...".to_string());
-            }
-
-            let mut s_pos = reg_start_pos.unwrap() + BEGIN_REGISTER_SEGMENT.len();
-            let mut e_pos = reg_end_pos.unwrap();
-
-            let reg_vec = if s_pos < e_pos {
-                let register_segment = load_variable_segment(file_string[s_pos..e_pos].as_ref());
-
-                if register_segment.is_err() {
-                    return Err(ERROR_MESSAGES[register_segment.err().unwrap() as usize].parse().unwrap());
-                }
-                register_segment.unwrap()
-            } else {
-                Vec::new()
-            };
-
-            s_pos = code_start_pos.unwrap() + BEGIN_CODE_SEGMENT.len();
-            e_pos = code_end_pos.unwrap();
-
-            let code_vec = if s_pos < e_pos {
-                let code_segment = load_code_segment(file_string[s_pos..e_pos].as_ref());
+            let code_vec = if file_string.len() > 0 {
+                let code_segment = load_code_segment(file_string.as_str());
 
                 if code_segment.is_err() {
                     return Err(ERROR_MESSAGES[code_segment.err().unwrap() as usize].parse().unwrap());
@@ -68,7 +27,7 @@ pub fn load_code_from_file(file_path: String) -> Result<(Vec<String>, Vec<String
                 Vec::new()
             };
 
-            Ok((reg_vec, code_vec))
+            Ok(code_vec)
         },
         Err(msg) => {
             Err(format!("{}: {}", file_path, msg).to_string())
@@ -80,16 +39,15 @@ pub fn load_code_from_file(file_path: String) -> Result<(Vec<String>, Vec<String
 /// containing the data in a 1:1 mapping according to the index of the data in the string
 ///
 /// # Arguments
-/// * segment_error_type - Tells the function which segment type error codes the function returns should
+/// * `segment_error_type` - Tells the function which segment type error codes the function returns should
 ///                          the parser encounter any error.
-/// * variable_string - A string that holds variable data in the format 'index value'. Each variable
+/// * `variable_string` - A string that holds variable data in the format 'index value'. Each variable
 ///                       in this string is separated by '\n' or '\r\n'.
 /// # Returns
-/// * Ok(Vec<String>) - An array holding the declared values.
-/// * Err(u32) - An error code. This happens when there was an error parsing the variable string.
+/// * `Ok(Vec<String>)` - An array holding the declared values.
+/// * `Err(u32)` - An error code. This happens when there was an error parsing the variable string.
 ///
 /// # Examples
-///
 /// ```
 /// let expected_result = VariableErrorCodes{
 ///             error: ErrorTypes::MalformedAssignment
@@ -103,14 +61,17 @@ fn load_segment(segment_error_type: SegmentErrorTypes, variable_string: &str, sp
     let mut err = error(&segment_error_type, ErrorTypes::AllOk).value();
     let mut variable_index = 0;
 
+    //return empty array if no registers are declared
     if variable_string.len() == 0 {
         return Ok(memory_vec)
     }
 
+    //Register segment was not declared correctly
     if !split_regex.is_match(variable_string.trim()) {
         return Err(error(&segment_error_type, ErrorTypes::MalformedSegment).value());
     }
 
+    //split the string by lines
     let variables = Regex::new(r"(\n|\r\n)").unwrap()
         .split(variable_string)
         .collect::<Vec<&str>>();
@@ -151,11 +112,12 @@ fn load_segment(segment_error_type: SegmentErrorTypes, variable_string: &str, sp
     }
 }
 
-fn load_variable_segment(segment: &str) -> Result<Vec<String>, u32> {
-    let var_regex = Regex::new(r#"^(\d+) (\w+)"#).unwrap();
-    load_segment(SegmentErrorTypes::Variable, segment, var_regex)
-}
-
+///Uses the load_segment function to load code data into memory.
+/// # Arguments
+///  * - `segment` - String slice containing code data
+/// # Returns
+/// * Ok(Vec<String>) - An array containing code data for the interpreter to execute.
+/// * Err(u32) - An error code. This happens when there was an error parsing the code string.
 fn load_code_segment(segment: &str) -> Result<Vec<String>, u32> {
     let var_regex = Regex::new(r#"^(\d+) (.+)"#).unwrap();
     load_segment(SegmentErrorTypes::Code, segment, var_regex)
@@ -163,92 +125,9 @@ fn load_code_segment(segment: &str) -> Result<Vec<String>, u32> {
 
 #[cfg(test)]
 mod test {
-    use crate::code_loader::{load_code_segment, load_variable_segment};
+    use crate::code_loader::load_code_segment;
     use crate::errors::segment_errors::{CodeErrorCode, ErrorCodes, ErrorTypes, VariableErrorCodes};
     use super::*;
-
-    #[test]
-    fn test_malformed_variable_segment() {
-        let result = load_variable_segment("1");
-        let expected_result = VariableErrorCodes{
-            error: ErrorTypes::MalformedSegment
-        };
-        assert_eq!(result.err().unwrap(), expected_result.value())
-    }
-
-    #[test]
-    fn test_malformed_assignment() {
-        let result = load_variable_segment("0 0\n1");
-        let expected_result = VariableErrorCodes{
-            error: ErrorTypes::MalformedAssignment
-        };
-        assert_eq!(result.err().unwrap(), expected_result.value())
-    }
-
-    #[test]
-    fn test_memory_array_one_item() {
-        let result = load_variable_segment("0 5\n");
-        assert_eq!(result.ok().unwrap(), vec![String::from("5")])
-    }
-
-    #[test]
-    fn test_memory_array_many_items() {
-        let item_string = "0 5\n1 6\n2 hello\n3 0";
-        let expected_array = item_string.split("\n").
-            map(|x| x.split(" ").collect::<Vec<&str>>()[1].to_string())
-            .collect::<Vec<String>>();
-        let result = load_variable_segment(item_string);
-        assert_eq!(result.ok().unwrap(), expected_array)
-    }
-
-    #[test]
-    fn test_out_of_chronological_order_one_item() {
-        let result = load_variable_segment("1 1");
-        let expected_result = VariableErrorCodes{
-            error: ErrorTypes::NotChronological
-        };
-        assert_eq!(result.err().unwrap(), expected_result.value())
-    }
-
-    #[test]
-    fn test_out_of_chronological_order_first_item() {
-        let result = load_variable_segment("1 0\n2 1\n3 1");
-        let expected_result = VariableErrorCodes{
-            error: ErrorTypes::NotChronological
-        };
-        assert_eq!(result.err().unwrap(), expected_result.value())
-    }
-
-    #[test]
-    fn test_out_of_chronological_order_middle_item() {
-        let result = load_variable_segment("0 0\n2 1\n3 1");
-        let expected_result = VariableErrorCodes{
-            error: ErrorTypes::NotChronological
-        };
-        assert_eq!(result.err().unwrap(), expected_result.value())
-    }
-
-    #[test]
-    fn test_out_of_chronological_order_last_item() {
-        let result = load_variable_segment("0 0\n1 1\n3 1");
-        let expected_result = VariableErrorCodes{
-            error: ErrorTypes::NotChronological
-        };
-        assert_eq!(result.err().unwrap(), expected_result.value())
-    }
-
-    #[test]
-    fn test_with_empty_string() {
-        let result = load_variable_segment("");
-        let expected_vector:Vec<String> = Vec::new();
-        assert_eq!(result.ok().unwrap(), expected_vector)
-    }
-
-    #[test]
-    fn test_with_multiple_newlines() {
-        let result = load_variable_segment("\n\r\n\n0 5\n\n\n1 2");
-        assert_eq!(result.ok().unwrap(), vec![String::from("5"), String::from("2")])
-    }
 
     #[test]
     fn test_loading_code() {
@@ -279,80 +158,45 @@ mod test {
 
         let result = load_code_from_file("testfiles/test1.txt".to_string());
 
-        assert_eq!(result.as_ref().ok().unwrap().0, vec!["5"]);
-        assert_eq!(result.as_ref().ok().unwrap().1, vec!["quit"]);
+        assert_eq!(result.ok().unwrap(), vec![String::from("quit")]);
     }
 
     #[test]
     fn load_large_test_file() {
-        let reg_vec = vec![
-            String::from("0"),
-            String::from("5"),
-            String::from("10"),
-            String::from("hello"),
-            String::from("world"),
-            String::from("66"),
-        ];
         let code_vec = vec![
-            String::from("let M0 = 5"),
-            String::from("if M0 < M1 goto C3"),
-            String::from("goto C6"),
-            String::from("output M3"),
-            String::from("output M4"),
+            String::from("let $a = 5"),
+            String::from("let $b = 5"),
+            String::from("let $c = 5"),
+            String::from("let $d = 5"),
+            String::from("let $e = 5"),
+            String::from("if $a < $b goto 7"),
+            String::from("goto 9"),
+            String::from("output $c"),
+            String::from("output $d"),
             String::from("quit"),
-            String::from("let M5 = M5 + M0"),
-            String::from("output M5"),
+            String::from("let $e = $e + $a"),
+            String::from("output $e"),
             String::from("quit"),
         ];
 
         let result = load_code_from_file("testfiles/test2.txt".to_string());
 
-        assert_eq!(result.as_ref().ok().unwrap().0, reg_vec);
-        assert_eq!(result.as_ref().ok().unwrap().1, code_vec);
-    }
-
-    #[test]
-    fn load_code_with_missing_segments() {
-        let mut result = load_code_from_file("testfiles/test3.txt".to_string());
-
-        assert_eq!(result.as_ref().err().unwrap(), "No register segment found! Aborting...");
-
-        result = load_code_from_file("testfiles/test4.txt".to_string());
-
-        assert_eq!(result.as_ref().err().unwrap(), "No code segment found! Aborting...");
-    }
-
-    #[test]
-    fn load_code_with_swapped_segment() {
-
-        let result = load_code_from_file("testfiles/test5.txt".to_string());
-
-        assert_eq!(result.as_ref().ok().unwrap().0, vec!["5"]);
-        assert_eq!(result.as_ref().ok().unwrap().1, vec!["quit"]);
-    }
-
-    #[test]
-    fn load_code_with_register_error() {
-
-        let result = load_code_from_file("testfiles/test6.txt".to_string());
-
-        assert_eq!(result.as_ref().err().unwrap(), ERROR_MESSAGES[5]);
+        assert_eq!(result.ok().unwrap(), code_vec);
     }
 
     #[test]
     fn load_code_with_code_error() {
-        let result = load_code_from_file("testfiles/test7.txt".to_string());
+        let result = load_code_from_file("testfiles/test3.txt".to_string());
 
         assert_eq!(result.as_ref().err().unwrap(), ERROR_MESSAGES[8]);
     }
 
     #[test]
-    fn load_file_with_empty_segments(){
-        let result = load_code_from_file("testfiles/test8.txt".to_string());
+    fn load_empty_file() {
+        let result = load_code_from_file("testfiles/test4.txt".to_string());
 
-        let empty_vec : Vec<String> = Vec::new();
+        let test: Vec<String> = Vec::new();
 
-        assert_eq!(result.as_ref().ok().unwrap().0, empty_vec.clone());
-        assert_eq!(result.as_ref().ok().unwrap().1, empty_vec);
+        assert_eq!(result.ok().unwrap(), test);
     }
 }
